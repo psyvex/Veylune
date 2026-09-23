@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
 
+mod job_controller;
+pub use job_controller::JobController;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExecutionBackend {
     WebGpu,
@@ -49,11 +52,7 @@ pub struct ResourceBudget {
 
 impl ResourceBudget {
     pub const fn new(memory_bytes: u64, intermediate_bytes: u64, class: ResourceClass) -> Self {
-        Self {
-            memory_bytes,
-            intermediate_bytes,
-            class,
-        }
+        Self { memory_bytes, intermediate_bytes, class }
     }
 }
 
