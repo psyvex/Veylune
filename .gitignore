@@ -1,0 +1,42 @@
+# Node
+node_modules/
+.pnpm-store/
+.yarn/
+.npm/
+
+# Build output
+.next/
+dist/
+build/
+out/
+coverage/
+
+# Rust
+/target/
+**/target/
+Cargo.lock
+
+# WASM / generated artifacts
+*.wasm
+*.wasm.map
+artifacts/
+.cache/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local Veylune data
+.local/
+.vscode-test/
+playwright-report/
+test-results/
