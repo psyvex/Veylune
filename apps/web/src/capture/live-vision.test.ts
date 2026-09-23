@@ -1,0 +1,10 @@
+import { describe, expect, it } from "vitest";
+import { BruteForceDescriptorMatcher, LocalVisionExtractor } from "./live-vision";
+import { LiveReconstructionProcessor } from "./live-reconstruction";
+import { identityCameraPose } from "./keyframe-pose";
+
+describe("browser-local live vision", () => {
+  it("extracts bounded keypoints and finite descriptors", async () => { const data = new Uint8ClampedArray(64 * 64 * 4); for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) { const i = (y * 64 + x) * 4; const v = ((x * 17 + y * 31) ^ (x * y)) & 255; data[i] = v; data[i + 1] = v; data[i + 2] = v; data[i + 3] = 255; } const frame = { timestampMs: 1, image: new ImageData(data, 64, 64) }; const set = await new LocalVisionExtractor({ maxKeypoints: 64 }).extract(frame); expect(set.keypoints.length).toBeLessThanOrEqual(64); expect(set.descriptors.length).toBe(set.keypoints.length); expect(set.descriptors.every((d) => d.values.every(Number.isFinite))).toBe(true); });
+  it("matches identical descriptors deterministically", () => { const matcher = new BruteForceDescriptorMatcher(); const descriptor = { values: new Float32Array([0, 1, 0, 1]), dimension: 4 }; const set = { keypoints: [{ x: 1, y: 1, score: 1 }], descriptors: [descriptor] }; expect(matcher.match(set, set)).toEqual([{ referenceIndex: 0, currentIndex: 0, distance: 0 }]); });
+  it("connects vision and pose estimates to capture", async () => { const extractor = { extract: async () => ({ keypoints: Array.from({ length: 8 }, (_, i) => ({ x: i + 5, y: i + 7, score: 1 })), descriptors: Array.from({ length: 8 }, () => ({ values: new Float32Array([1, 0]), dimension: 2 })) }) }; const matcher = new BruteForceDescriptorMatcher(); const poseEstimator = { estimate: async () => identityCameraPose(), reset: () => undefined }; const processor = new LiveReconstructionProcessor({ intrinsics: { fx: 50, fy: 50, cx: 32, cy: 32 }, extractor, matcher, poseEstimator }); const frame = { timestampMs: 1, image: new ImageData(new Uint8ClampedArray(64 * 64 * 4), 64, 64) }; expect(await processor.process(frame)).toBe(true); expect(processor.snapshot()).toBeDefined(); });
+});
