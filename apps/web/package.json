@@ -15,6 +15,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
   },
+  "dependencies": {
+    "onnxruntime-web": "1.30.0"
+  },
   "devDependencies": {
     "@vitest/coverage-v8": "5.0.1",
     "typescript": "7.0.2",
