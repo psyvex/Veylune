@@ -1,0 +1,19 @@
+import { OptimizationScheduler, type OptimizationSchedulerOptions } from "./optimization-scheduler";
+import type { ReconstructionController, ReconstructionControllerResult } from "./reconstruction-controller";
+
+export interface ScheduledOptimizationOptions extends OptimizationSchedulerOptions { readonly maxIterations?: number; readonly onResult?: (result: ReconstructionControllerResult) => void; readonly onError?: (error: unknown) => void; }
+
+export class ScheduledOptimizationController {
+  private readonly scheduler: OptimizationScheduler<number>;
+  constructor(private readonly controller: ReconstructionController, options: ScheduledOptimizationOptions = {}) {
+    this.scheduler = new OptimizationScheduler(async ({ input }) => {
+      try { const result = await this.controller.optimize(options.maxIterations ?? 5); options.onResult?.(result); }
+      catch (error) { options.onError?.(error); }
+    }, options);
+  }
+  request(version: number): void { this.scheduler.request({ version, input: version }); }
+  cancel(): void { this.scheduler.cancel(); }
+  dispose(): void { this.scheduler.dispose(); }
+  get isRunning(): boolean { return this.scheduler.isRunning; }
+  get hasPendingWork(): boolean { return this.scheduler.hasPendingWork; }
+}
