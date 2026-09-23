@@ -14,7 +14,8 @@ describe("reconstruction state store", () => {
   it("commits map and pose state as one validated snapshot", () => {
     const store = new ReconstructionStateStore(session());
     const current = store.snapshot();
-    expect(store.commit({ expectedMapVersion: current.map.version, expectedPoseVersion: current.poses.version, snapshot: { ...current, createdAtMs: 2 } })).toBe(true);
+    const candidate = { ...current, map: { ...current.map, version: current.map.version + 1 }, poses: { ...current.poses, version: current.poses.version + 1 }, createdAtMs: 2 };
+    expect(store.commit({ expectedMapVersion: current.map.version, expectedPoseVersion: current.poses.version, snapshot: candidate })).toBe(true);
     expect(store.snapshot().createdAtMs).toBe(2);
   });
 
@@ -28,7 +29,7 @@ describe("reconstruction state store", () => {
   it("rejects invalid candidates before mutation", () => {
     const store = new ReconstructionStateStore(session());
     const current = store.snapshot();
-    const invalid = { ...current, observations: [{ id: "bad", keyframeId: "missing", landmarkId: "lm", x: 0, y: 0 }] };
+    const invalid = { ...current, map: { ...current.map, version: current.map.version + 1 }, poses: { ...current.poses, version: current.poses.version + 1 }, observations: [{ id: "bad", keyframeId: "missing", landmarkId: "lm", x: 0, y: 0 }] };
     expect(store.commit({ expectedMapVersion: current.map.version, expectedPoseVersion: current.poses.version, snapshot: invalid })).toBe(false);
     expect(store.snapshot().observations[0]?.id).toBe("obs");
   });
