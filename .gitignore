@@ -14,7 +14,6 @@ coverage/
 # Rust
 /target/
 **/target/
-Cargo.lock
 
 # WASM / generated artifacts
 *.wasm
