@@ -16,13 +16,21 @@ export interface Keyframe {
   readonly landmarkIds: readonly string[];
 }
 
+export interface LocalMapSnapshot {
+  readonly version: number;
+  readonly landmarks: readonly Landmark[];
+  readonly keyframes: readonly Keyframe[];
+}
+
 export class LocalMap {
   private readonly landmarks = new Map<string, Landmark>();
   private readonly keyframes = new Map<string, Keyframe>();
+  private version = 0;
 
   addKeyframe(keyframe: Keyframe): void {
     if (this.keyframes.has(keyframe.id)) throw new Error(`Keyframe ${keyframe.id} already exists.`);
     this.keyframes.set(keyframe.id, keyframe);
+    this.version += 1;
   }
 
   upsertLandmark(id: string, point: TriangulatedPoint, frameIndex: number): Landmark {
@@ -36,6 +44,7 @@ export class LocalMap {
       lastSeenFrame: frameIndex,
     };
     this.landmarks.set(id, next);
+    this.version += 1;
     return next;
   }
 
@@ -43,9 +52,39 @@ export class LocalMap {
   getKeyframe(id: string): Keyframe | undefined { return this.keyframes.get(id); }
   landmarkCount(): number { return this.landmarks.size; }
   keyframeCount(): number { return this.keyframes.size; }
+  snapshot(): LocalMapSnapshot { return { version: this.version, landmarks: [...this.landmarks.values()], keyframes: [...this.keyframes.values()] }; }
+
+  commitSnapshot(expectedVersion: number, snapshot: LocalMapSnapshot): boolean {
+    if (expectedVersion !== this.version || !validateSnapshot(snapshot)) return false;
+    this.landmarks.clear();
+    this.keyframes.clear();
+    for (const landmark of snapshot.landmarks) this.landmarks.set(landmark.id, landmark);
+    for (const keyframe of snapshot.keyframes) this.keyframes.set(keyframe.id, keyframe);
+    this.version += 1;
+    return true;
+  }
 
   clear(): void {
     this.landmarks.clear();
     this.keyframes.clear();
+    this.version += 1;
   }
+}
+
+export function validateSnapshot(snapshot: LocalMapSnapshot): boolean {
+  if (!Number.isInteger(snapshot.version) || snapshot.version < 0) return false;
+  const landmarkIds = new Set<string>();
+  for (const landmark of snapshot.landmarks) {
+    if (!landmark.id || landmarkIds.has(landmark.id)) return false;
+    if (![landmark.x, landmark.y, landmark.z, landmark.observations, landmark.lastSeenFrame].every(Number.isFinite) || landmark.z <= 0 || landmark.observations < 0) return false;
+    landmarkIds.add(landmark.id);
+  }
+  const keyframeIds = new Set<string>();
+  for (const keyframe of snapshot.keyframes) {
+    if (!keyframe.id || keyframeIds.has(keyframe.id)) return false;
+    if (![keyframe.frameIndex, keyframe.timestampMs].every(Number.isFinite)) return false;
+    if (keyframe.landmarkIds.some((id) => !landmarkIds.has(id))) return false;
+    keyframeIds.add(keyframe.id);
+  }
+  return true;
 }
