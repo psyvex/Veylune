@@ -1,0 +1,29 @@
+import { openCamera, type CameraSession } from "./capture/camera";
+import { LiveScanSession, type ScanProcessor } from "./capture/live-scan";
+import type { CapabilityProfile } from "./runtime/capabilities";
+
+export interface CaptureApp { readonly element: HTMLElement; dispose(): void; }
+
+export function mountCaptureApp(root: HTMLElement, capabilities: CapabilityProfile): CaptureApp {
+  let camera: CameraSession | undefined;
+  let scan: LiveScanSession | undefined;
+  let running = false;
+  const shell = document.createElement("section");
+  shell.className = "veylune-capture";
+  shell.innerHTML = `<header><h1>Veylune</h1><p>Local-first 3D capture</p></header><div class="capture-stage"><video autoplay muted playsinline></video><canvas aria-hidden="true"></canvas><div class="capture-status" role="status">Ready to scan</div></div><div class="capture-controls"><button type="button" data-action="start">Start camera</button><button type="button" data-action="snapshot" disabled>Capture image</button><button type="button" data-action="stop" disabled>Stop</button></div><dl class="capture-capabilities"><div><dt>WebGPU</dt><dd>${capabilities.webgpu}</dd></div><div><dt>WASM</dt><dd>${capabilities.wasm}</dd></div><div><dt>Workers</dt><dd>${capabilities.workers}</dd></div></dl>`;
+  root.replaceChildren(shell);
+  const video = shell.querySelector<HTMLVideoElement>("video")!;
+  const canvas = shell.querySelector<HTMLCanvasElement>("canvas")!;
+  const status = shell.querySelector<HTMLElement>(".capture-status")!;
+  const start = shell.querySelector<HTMLButtonElement>("[data-action=start]")!;
+  const snapshot = shell.querySelector<HTMLButtonElement>("[data-action=snapshot]")!;
+  const stop = shell.querySelector<HTMLButtonElement>("[data-action=stop]")!;
+
+  const processor: ScanProcessor = { async process(frame) { return frame.image.width >= 320 && frame.image.height >= 240; }, reset() {} };
+  const captureFrame = (): void => { if (!video.videoWidth || !video.videoHeight) return; canvas.width = video.videoWidth; canvas.height = video.videoHeight; const context = canvas.getContext("2d"); if (!context) return; context.drawImage(video, 0, 0); status.textContent = `Captured ${canvas.width} × ${canvas.height}`; };
+  const startCamera = async (): Promise<void> => { if (running) return; start.disabled = true; status.textContent = "Requesting camera permission…"; try { camera = await openCamera({ facingMode: "environment", width: 1280, height: 720, frameRate: 30 }); video.srcObject = camera.stream; scan = new LiveScanSession(camera, processor, { maxFps: 15, maxWidth: 1280, onMetrics: (metrics) => { status.textContent = `Scanning · ${metrics.accepted} accepted · ${Math.round(metrics.averageLatencyMs)} ms/frame`; } }); scan.start(); running = true; snapshot.disabled = false; stop.disabled = false; } catch (error) { status.textContent = error instanceof Error ? error.message : "Unable to start camera."; start.disabled = false; } };
+  const stopCamera = (): void => { scan?.stop(); scan = undefined; camera = undefined; running = false; snapshot.disabled = true; stop.disabled = true; start.disabled = false; status.textContent = "Camera stopped"; };
+  start.addEventListener("click", () => void startCamera()); snapshot.addEventListener("click", captureFrame); stop.addEventListener("click", stopCamera);
+  const dispose = (): void => { stopCamera(); start.replaceWith(start.cloneNode(true)); snapshot.replaceWith(snapshot.cloneNode(true)); stop.replaceWith(stop.cloneNode(true)); shell.remove(); };
+  return { element: shell, dispose };
+}
