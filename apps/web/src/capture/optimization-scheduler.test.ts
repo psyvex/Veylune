@@ -36,4 +36,15 @@ describe("OptimizationScheduler", () => {
     expect(() => scheduler.request({ version: -1, input: null })).toThrow();
     scheduler.dispose();
   });
+
+  it("does not schedule work after disposal", async () => {
+    vi.useFakeTimers();
+    const runs: number[] = [];
+    const scheduler = new OptimizationScheduler(async ({ version }) => { runs.push(version); }, { debounceMs: 50, minimumIntervalMs: 0 });
+    scheduler.request({ version: 7, input: null });
+    scheduler.dispose();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(runs).toEqual([]);
+    vi.useRealTimers();
+  });
 });
