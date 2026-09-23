@@ -1,9 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
-import { LiveScanController } from "./live-scan";
-import { CameraFrameScheduler } from "./camera-frames";
+import { describe, expect, it } from "vitest";
+import { LiveScanSession, type ScanFrame, type ScanProcessor } from "./live-scan";
 
-function video(): HTMLVideoElement { return { videoWidth: 640, videoHeight: 480, readyState: HTMLMediaElement.HAVE_CURRENT_DATA } as HTMLVideoElement; }
+class FakeProcessor implements ScanProcessor { calls = 0; resetCalls = 0; constructor(private readonly result = true) {} async process(_frame: ScanFrame): Promise<boolean> { this.calls++; return this.result; } reset(): void { this.resetCalls++; } }
+function camera(): { video: HTMLVideoElement; stop(): void } { const video = document.createElement("video"); Object.defineProperties(video, { readyState: { value: 2 }, videoWidth: { value: 64 }, videoHeight: { value: 48 } }); return { video, stop() {} }; }
 
-describe("camera frame scheduler", () => { it("drops work while processing and respects fps", async () => { const callbacks: unknown[] = []; const scheduler = new CameraFrameScheduler(video(), (frame) => { callbacks.push(frame); }, { maxFps: 30 }); expect(scheduler).toBeDefined(); scheduler.stop(); }); });
-
-describe("live scan controller", () => { it("reports processing state", async () => { const stop = vi.fn(); const controller = new LiveScanController({ camera: { facingMode: "environment", width: 640, height: 480, frameRate: 30 }, process: () => true }); expect(controller.getState().running).toBe(false); expect(stop).not.toHaveBeenCalled(); }); });
+describe("LiveScanSession", () => {
+  it("enforces single-flight processing and reports accepted frames", async () => { const processor = new FakeProcessor(true); const session = new LiveScanSession(camera(), processor, { maxFps: 60, maxWidth: 64 }); session.start(); await new Promise((resolve) => setTimeout(resolve, 30)); session.stop(); expect(processor.calls).toBeGreaterThan(0); expect(session.getMetrics().accepted).toBe(processor.calls); expect(session.getMetrics().processed).toBe(processor.calls); });
+  it("records tracking loss and resets the processor on stop", async () => { const processor = new FakeProcessor(false); const session = new LiveScanSession(camera(), processor, { maxFps: 60, maxWidth: 64 }); session.start(); await new Promise((resolve) => setTimeout(resolve, 30)); session.stop(); expect(session.getMetrics().trackingLost).toBeGreaterThan(0); expect(processor.resetCalls).toBe(1); });
+});
