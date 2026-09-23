@@ -17,7 +17,7 @@ pub enum EvidenceState {
     Unavailable,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Confidence {
     pub geometry: f32,
     pub texture: f32,
@@ -50,5 +50,32 @@ impl ProjectManifest {
             project_id,
             title: title.into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn confidence_is_clamped() {
+        let confidence = Confidence {
+            geometry: -1.0,
+            texture: 0.5,
+            pose: 2.0,
+            detail: 1.0,
+        }
+        .clamped();
+
+        assert_eq!(confidence.geometry, 0.0);
+        assert_eq!(confidence.texture, 0.5);
+        assert_eq!(confidence.pose, 1.0);
+        assert_eq!(confidence.detail, 1.0);
+    }
+
+    #[test]
+    fn project_manifest_starts_at_current_schema() {
+        let project = ProjectManifest::new(AssetId(1), "Foundation");
+        assert_eq!(project.schema_version, PROJECT_SCHEMA_VERSION);
     }
 }
