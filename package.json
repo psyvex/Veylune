@@ -1,0 +1,19 @@
+{
+  "name": "veylune",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=24.21.0",
+    "npm": ">=12.1.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "web:dev": "npm --workspace @veylune/web run dev",
+    "web:build": "npm --workspace @veylune/web run build",
+    "web:typecheck": "npm --workspace @veylune/web run typecheck",
+    "web:test": "npm --workspace @veylune/web run test"
+  }
+}
