@@ -30,11 +30,7 @@ export class OptimizationScheduler<T> {
     if (this.timer !== undefined) { clearTimeout(this.timer); this.timer = undefined; }
   }
 
-  dispose(): void {
-    this.disposed = true;
-    this.cancel();
-  }
-
+  dispose(): void { this.disposed = true; this.cancel(); }
   get isRunning(): boolean { return this.running; }
   get hasPendingWork(): boolean { return this.pending !== undefined; }
 
