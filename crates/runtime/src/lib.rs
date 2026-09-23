@@ -52,7 +52,11 @@ pub struct ResourceBudget {
 
 impl ResourceBudget {
     pub const fn new(memory_bytes: u64, intermediate_bytes: u64, class: ResourceClass) -> Self {
-        Self { memory_bytes, intermediate_bytes, class }
+        Self {
+            memory_bytes,
+            intermediate_bytes,
+            class,
+        }
     }
 }
 
