@@ -10,7 +10,7 @@ export class ReconstructionStateStore {
   commit(change: ReconstructionStateCommit): boolean {
     if (this.snapshotValue.map.version !== change.expectedMapVersion || this.snapshotValue.poses.version !== change.expectedPoseVersion) return false;
     if (!validateReconstructionSession(change.snapshot)) return false;
-    if (change.snapshot.map.version !== change.expectedMapVersion || change.snapshot.poses.version !== change.expectedPoseVersion) return false;
+    if (change.snapshot.map.version !== change.expectedMapVersion + 1 || change.snapshot.poses.version !== change.expectedPoseVersion + 1) return false;
     this.snapshotValue = cloneSnapshot(change.snapshot);
     return true;
   }
