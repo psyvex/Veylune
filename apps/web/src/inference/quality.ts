@@ -40,3 +40,16 @@ export function estimateFrameQuality(input: QualityInput): FrameQualitySignal {
     usable: sharpness >= 0.08 && exposure >= 0.2,
   };
 }
+
+export function estimateRgbaQuality(
+  bytes: Uint8Array,
+  width: number,
+  height: number,
+): FrameQualitySignal {
+  if (width < 1 || height < 1 || width * height * 4 !== bytes.byteLength) {
+    return { sharpness: 0, exposure: 0, motion: 0, usable: false };
+  }
+
+  const pixels = new ImageData(new Uint8ClampedArray(bytes), width, height);
+  return estimateFrameQuality({ width, height, pixels });
+}
