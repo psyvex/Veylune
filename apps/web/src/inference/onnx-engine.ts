@@ -2,9 +2,7 @@ import type { InferenceBackend } from "./model";
 import type { InferenceEngine, TensorInput, TensorOutput } from "./engine";
 
 export interface OnnxRuntimeModule {
-  InferenceSession: {
-    create(model: ArrayBuffer, options: { executionProviders: string[] }): Promise<OnnxSession>;
-  };
+  InferenceSession: { create(model: ArrayBuffer, options: { executionProviders: string[] }): Promise<OnnxSession> };
   Tensor: new (type: "float32", data: Float32Array, dims: readonly number[]) => OnnxTensor;
 }
 
@@ -15,14 +13,11 @@ interface OnnxSession {
   release?(): Promise<void>;
 }
 
-interface OnnxTensor {
-  readonly data: Float32Array;
-  readonly dims: readonly number[];
-}
+interface OnnxTensor { readonly data: Float32Array; readonly dims: readonly number[] }
 
 export class OnnxInferenceEngine implements InferenceEngine {
   readonly backend: InferenceBackend;
-  private session?: OnnxSession;
+  private session: OnnxSession | undefined;
   private readonly runtime: OnnxRuntimeModule;
 
   constructor(runtime: OnnxRuntimeModule, backend: InferenceBackend) {
@@ -32,18 +27,13 @@ export class OnnxInferenceEngine implements InferenceEngine {
 
   async load(modelBytes: ArrayBuffer): Promise<void> {
     await this.unload();
-    this.session = await this.runtime.InferenceSession.create(modelBytes, {
-      executionProviders: [this.backend],
-    });
+    this.session = await this.runtime.InferenceSession.create(modelBytes, { executionProviders: [this.backend] });
   }
 
   async run(input: TensorInput): Promise<TensorOutput> {
     const session = this.session;
     if (!session) throw new Error("ONNX inference session is not loaded.");
-    if (session.inputNames.length !== 1 || session.outputNames.length !== 1) {
-      throw new Error("The realtime adapter requires exactly one input and one output tensor.");
-    }
-
+    if (session.inputNames.length !== 1 || session.outputNames.length !== 1) throw new Error("The realtime adapter requires exactly one input and one output tensor.");
     const tensor = new this.runtime.Tensor("float32", input.data, input.shape);
     const outputs = await session.run({ [session.inputNames[0]!]: tensor });
     const output = outputs[session.outputNames[0]!];

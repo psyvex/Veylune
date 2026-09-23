@@ -11,14 +11,20 @@ pub struct JobController {
 impl JobController {
     pub const fn new(total_steps: u32, budget: ResourceBudget) -> Self {
         Self {
-            status: JobStatus { state: JobState::Queued, completed_steps: 0, total_steps },
+            status: JobStatus {
+                state: JobState::Queued,
+                completed_steps: 0,
+                total_steps,
+            },
             budget,
             reserved_memory: 0,
             reserved_intermediate: 0,
         }
     }
 
-    pub const fn status(&self) -> JobStatus { self.status }
+    pub const fn status(&self) -> JobStatus {
+        self.status
+    }
 
     pub fn start(&mut self) -> Result<(), RuntimeError> {
         match self.status.state {
@@ -30,9 +36,19 @@ impl JobController {
         }
     }
 
-    pub fn reserve(&mut self, memory_bytes: u64, intermediate_bytes: u64) -> Result<(), RuntimeError> {
-        let memory = self.reserved_memory.checked_add(memory_bytes).ok_or(RuntimeError::ResourceLimitExceeded)?;
-        let intermediate = self.reserved_intermediate.checked_add(intermediate_bytes).ok_or(RuntimeError::ResourceLimitExceeded)?;
+    pub fn reserve(
+        &mut self,
+        memory_bytes: u64,
+        intermediate_bytes: u64,
+    ) -> Result<(), RuntimeError> {
+        let memory = self
+            .reserved_memory
+            .checked_add(memory_bytes)
+            .ok_or(RuntimeError::ResourceLimitExceeded)?;
+        let intermediate = self
+            .reserved_intermediate
+            .checked_add(intermediate_bytes)
+            .ok_or(RuntimeError::ResourceLimitExceeded)?;
         if memory > self.budget.memory_bytes || intermediate > self.budget.intermediate_bytes {
             return Err(RuntimeError::ResourceLimitExceeded);
         }
@@ -43,7 +59,9 @@ impl JobController {
 
     pub fn release(&mut self, memory_bytes: u64, intermediate_bytes: u64) {
         self.reserved_memory = self.reserved_memory.saturating_sub(memory_bytes);
-        self.reserved_intermediate = self.reserved_intermediate.saturating_sub(intermediate_bytes);
+        self.reserved_intermediate = self
+            .reserved_intermediate
+            .saturating_sub(intermediate_bytes);
     }
 
     pub fn request_cancel(&mut self) -> Result<(), RuntimeError> {
@@ -62,9 +80,17 @@ impl JobController {
 
     pub fn complete_step(&mut self) -> Result<(), RuntimeError> {
         if self.status.state != JobState::Running {
-            return Err(if self.status.state == JobState::Cancelling { RuntimeError::Cancelled } else { RuntimeError::InvalidTransition });
+            return Err(if self.status.state == JobState::Cancelling {
+                RuntimeError::Cancelled
+            } else {
+                RuntimeError::InvalidTransition
+            });
         }
-        self.status.completed_steps = self.status.completed_steps.saturating_add(1).min(self.status.total_steps);
+        self.status.completed_steps = self
+            .status
+            .completed_steps
+            .saturating_add(1)
+            .min(self.status.total_steps);
         Ok(())
     }
 
@@ -126,7 +152,12 @@ mod tests {
 
     #[test]
     fn capability_selection_remains_unchanged() {
-        let profile = CapabilityProfile { webgpu: true, wasm_simd: true, wasm_threads: true, quality: QualityTier::High };
+        let profile = CapabilityProfile {
+            webgpu: true,
+            wasm_simd: true,
+            wasm_threads: true,
+            quality: QualityTier::High,
+        };
         assert_eq!(profile.preferred_backend(), ExecutionBackend::WebGpu);
     }
 }

@@ -12,27 +12,27 @@ export interface TemporalPoseState {
 }
 
 export class TemporalPoseFilter {
-  private state?: TemporalPoseState;
+  private state: TemporalPoseState | undefined;
 
   update(sample: PoseSample): TemporalPoseState {
-    if (!Number.isFinite(sample.timestampMs) || sample.timestampMs <= 0 || !Number.isFinite(sample.confidence)) {
-      throw new Error("Invalid pose sample.");
-    }
+    if (!Number.isFinite(sample.timestampMs) || sample.timestampMs <= 0 || !Number.isFinite(sample.confidence)) throw new Error("Invalid pose sample.");
     if (!this.state) {
       this.state = { sample, velocity: [0, 0, 0] };
       return this.state;
     }
-
     const dt = (sample.timestampMs - this.state.sample.timestampMs) / 1000;
     if (dt <= 0 || dt > 1) return this.state;
-
     const alpha = Math.max(0.1, Math.min(0.8, sample.confidence));
-    const predicted = this.state.velocity.map((v, index) => {
-      const coordinate = index === 0 ? this.state!.sample.x : index === 1 ? this.state!.sample.y : this.state!.sample.z;
-      return coordinate + v * dt;
-    }) as [number, number, number];
-    const observed: [number, number, number] = [sample.x, sample.y, sample.z];
-    const next = observed.map((value, index) => predicted[index] + alpha * (value - predicted[index])) as [number, number, number];
+    const predicted: [number, number, number] = [
+      this.state.sample.x + this.state.velocity[0]! * dt,
+      this.state.sample.y + this.state.velocity[1]! * dt,
+      this.state.sample.z + this.state.velocity[2]! * dt,
+    ];
+    const next: [number, number, number] = [
+      sample.x + alpha * (predicted[0] - sample.x),
+      sample.y + alpha * (predicted[1] - sample.y),
+      sample.z + alpha * (predicted[2] - sample.z),
+    ];
     const velocity: [number, number, number] = [
       (next[0] - this.state.sample.x) / dt,
       (next[1] - this.state.sample.y) / dt,
@@ -42,7 +42,5 @@ export class TemporalPoseFilter {
     return this.state;
   }
 
-  reset(): void {
-    this.state = undefined;
-  }
+  reset(): void { this.state = undefined; }
 }

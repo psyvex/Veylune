@@ -28,19 +28,13 @@ self.addEventListener("message", async (event: MessageEvent<InferenceWorkerReque
       emit({ type: "error", jobId: request.jobId, code: "CANCELLED", message: "Inference job was cancelled." });
       return;
     }
-
     emit({ type: "progress", jobId: request.jobId, completed: 0, total: 1 });
     emit({ type: "error", jobId: request.jobId, code: "RUNTIME_UNAVAILABLE", message: "No concrete inference engine is installed in this build." });
   } catch (error) {
-    emit({
-      type: "error",
-      jobId: request.type === "run" ? request.jobId : undefined,
-      code: "WORKER_ERROR",
-      message: error instanceof Error ? error.message : "Unknown worker error.",
-    });
+    const message = error instanceof Error ? error.message : "Unknown worker error.";
+    if (request.type === "run") emit({ type: "error", jobId: request.jobId, code: "WORKER_ERROR", message });
+    else emit({ type: "error", code: "WORKER_ERROR", message });
   }
 });
 
-function emit(event: InferenceWorkerEvent): void {
-  self.postMessage(event);
-}
+function emit(event: InferenceWorkerEvent): void { self.postMessage(event); }
