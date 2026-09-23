@@ -30,11 +30,17 @@ export function applySE3Increment(rotation: Mat3, translation: Vec3, increment: 
 }
 
 function identity3(): Mat3 { return [1, 0, 0, 0, 1, 0, 0, 0, 1]; }
-function scale3(a: Mat3, s: number): Mat3 { return a.map((v) => v * s) as Mat3; }
-function add3(...mats: Mat3[]): Mat3 { return mats[0].map((_, i) => mats.reduce((sum, matrix) => sum + matrix[i]!, 0)) as Mat3; }
-function multiply3(a: Mat3, b: Mat3): Mat3 {
-  const out = new Array<number>(9).fill(0);
-  for (let r = 0; r < 3; r += 1) for (let c = 0; c < 3; c += 1) for (let k = 0; k < 3; k += 1) out[r * 3 + c] += a[r * 3 + k]! * b[k * 3 + c]!;
-  return out as Mat3;
+function scale3(a: Mat3, s: number): Mat3 {
+  return [a[0] * s, a[1] * s, a[2] * s, a[3] * s, a[4] * s, a[5] * s, a[6] * s, a[7] * s, a[8] * s];
 }
-function multiplyVec3(a: Mat3, v: Vec3): Vec3 { return [a[0]! * v[0] + a[1]! * v[1] + a[2]! * v[2], a[3]! * v[0] + a[4]! * v[1] + a[5]! * v[2], a[6]! * v[0] + a[7]! * v[1] + a[8]! * v[2]]; }
+function add3(a: Mat3, b: Mat3, c: Mat3): Mat3 {
+  return [a[0] + b[0] + c[0], a[1] + b[1] + c[1], a[2] + b[2] + c[2], a[3] + b[3] + c[3], a[4] + b[4] + c[4], a[5] + b[5] + c[5], a[6] + b[6] + c[6], a[7] + b[7] + c[7], a[8] + b[8] + c[8]];
+}
+function multiply3(a: Mat3, b: Mat3): Mat3 {
+  return [
+    a[0] * b[0] + a[1] * b[3] + a[2] * b[6], a[0] * b[1] + a[1] * b[4] + a[2] * b[7], a[0] * b[2] + a[1] * b[5] + a[2] * b[8],
+    a[3] * b[0] + a[4] * b[3] + a[5] * b[6], a[3] * b[1] + a[4] * b[4] + a[5] * b[7], a[3] * b[2] + a[4] * b[5] + a[5] * b[8],
+    a[6] * b[0] + a[7] * b[3] + a[8] * b[6], a[6] * b[1] + a[7] * b[4] + a[8] * b[7], a[6] * b[2] + a[7] * b[5] + a[8] * b[8],
+  ];
+}
+function multiplyVec3(a: Mat3, v: Vec3): Vec3 { return [a[0] * v[0] + a[1] * v[1] + a[2] * v[2], a[3] * v[0] + a[4] * v[1] + a[5] * v[2], a[6] * v[0] + a[7] * v[1] + a[8] * v[2]]; }
