@@ -1,0 +1,11 @@
+[package]
+name = "veylune-reconstruction"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+veylune-core = { path = "../core" }
+veylune-geometry = { path = "../geometry" }
+anyhow.workspace = true
