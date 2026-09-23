@@ -33,13 +33,17 @@ export function buildSchurReducedSystem(blocks: SchurBlocks, damping = 1e-6): Sc
   for (let landmarkOffset = 0; landmarkOffset < landmarkSize; landmarkOffset += 3) {
     const c = new Float64Array(9);
     for (let r = 0; r < 3; r += 1) for (let col = 0; col < 3; col += 1) {
-      c[r * 3 + col] = blocks.landmark.values[(landmarkOffset + r) * landmarkSize + landmarkOffset + col] + (r === col ? damping : 0);
+      c[r * 3 + col] = blocks.landmark.values[(landmarkOffset + r) * landmarkSize + landmarkOffset + col]! + (r === col ? damping : 0);
     }
     const inverse = invert3(c);
     if (!inverse) return undefined;
     landmarkInverses.push(inverse);
 
-    const invGradient = multiply3x3Vec(inverse, blocks.landmarkGradient.slice(landmarkOffset, landmarkOffset + 3));
+    const invGradient = multiply3x3Vec(inverse, [
+      blocks.landmarkGradient[landmarkOffset]!,
+      blocks.landmarkGradient[landmarkOffset + 1]!,
+      blocks.landmarkGradient[landmarkOffset + 2]!,
+    ]);
     for (let i = 0; i < cameraSize; i += 1) {
       const b = blockRow(blocks.cameraLandmark, i, landmarkOffset);
       gradient[i] -= dot3(b, invGradient);
