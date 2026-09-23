@@ -1,0 +1,60 @@
+import type { FeatureMatcher, FeatureSet } from "./features";
+import { estimateTrackingConfidence, retainReliableMatches } from "./features";
+import { verifyMatches, type CameraIntrinsics } from "./geometry";
+import { LocalMap } from "./map";
+import { PoseGraph, identityCameraPose } from "./keyframe-pose";
+import { triangulateCorrespondences, type CameraPose } from "./triangulation";
+import { createReconstructionSession, type ReconstructionCalibration, type ReconstructionObservation, type ReconstructionSessionSnapshot } from "./reconstruction-session";
+import { ZERO_DISTORTION } from "./distortion";
+
+export interface CaptureFrame { readonly id: string; readonly frameIndex: number; readonly timestampMs: number; readonly features: FeatureSet; }
+export interface CapturePipelineOptions { readonly intrinsics: CameraIntrinsics; readonly distortion?: ReconstructionCalibration["distortion"]; readonly maxMatchDistance?: number; readonly geometryThresholdPx?: number; readonly maxReprojectionErrorPx?: number; readonly minimumTrackingConfidence?: number; }
+export interface CaptureStepResult { readonly accepted: boolean; readonly reason: "initialized" | "tracked" | "insufficient-features" | "insufficient-geometry" | "insufficient-parallax"; readonly confidence: number; readonly session?: ReconstructionSessionSnapshot; }
+
+export class CapturePipeline {
+  private readonly map = new LocalMap();
+  private readonly poses = new PoseGraph();
+  private reference?: CaptureFrame;
+  private referencePose?: CameraPose;
+  private observations: ReconstructionObservation[] = [];
+  private session?: ReconstructionSessionSnapshot;
+  private readonly options: Required<CapturePipelineOptions>;
+
+  constructor(options: CapturePipelineOptions) { this.options = { distortion: ZERO_DISTORTION, maxMatchDistance: 0.45, geometryThresholdPx: 3, maxReprojectionErrorPx: 2, minimumTrackingConfidence: 0.5, ...options }; }
+  initialize(frame: CaptureFrame, pose: CameraPose = identityCameraPose()): CaptureStepResult {
+    if (frame.features.keypoints.length < 4) return { accepted: false, reason: "insufficient-features", confidence: 0 };
+    this.map.addKeyframe({ id: frame.id, frameIndex: frame.frameIndex, timestampMs: frame.timestampMs, landmarkIds: [], pose });
+    this.poses.add({ id: frame.id, frameIndex: frame.frameIndex, timestampMs: frame.timestampMs, pose, fixed: true });
+    this.reference = frame; this.referencePose = pose;
+    this.session = createReconstructionSession(this.map.snapshot(), this.poses.snapshot(), [], { intrinsics: this.options.intrinsics, distortion: this.options.distortion }, frame.timestampMs);
+    return { accepted: true, reason: "initialized", confidence: 1, session: this.session };
+  }
+  process(frame: CaptureFrame, matcher: FeatureMatcher, pose: CameraPose): CaptureStepResult {
+    const reference = this.reference; const referencePose = this.referencePose;
+    if (!reference || !referencePose || !this.session) return this.initialize(frame, pose);
+    if (frame.features.keypoints.length < 4) return { accepted: false, reason: "insufficient-features", confidence: 0, session: this.session };
+    const matches = retainReliableMatches(matcher.match(reference.features, frame.features), this.options.maxMatchDistance);
+    const geometry = verifyMatches(reference.features.keypoints, frame.features.keypoints, matches, this.options.geometryThresholdPx);
+    const confidence = Math.min(estimateTrackingConfidence(geometry.inliers), geometry.confidence);
+    if (confidence < this.options.minimumTrackingConfidence || geometry.inliers.length < 8) return { accepted: false, reason: "insufficient-geometry", confidence, session: this.session };
+    const triangulation = triangulateCorrespondences(reference.features.keypoints, frame.features.keypoints, geometry.inliers, this.options.intrinsics, referencePose, pose, this.options.maxReprojectionErrorPx);
+    if (!triangulation.accepted) return { accepted: false, reason: "insufficient-parallax", confidence, session: this.session };
+    this.map.addKeyframe({ id: frame.id, frameIndex: frame.frameIndex, timestampMs: frame.timestampMs, landmarkIds: [], pose });
+    this.poses.add({ id: frame.id, frameIndex: frame.frameIndex, timestampMs: frame.timestampMs, pose, fixed: false });
+    const landmarkIds: string[] = [];
+    for (let index = 0; index < triangulation.points.length; index += 1) {
+      const point = triangulation.points[index]!; const landmarkId = `lm:${reference.id}:${frame.id}:${index}`;
+      this.map.upsertLandmark(landmarkId, point, frame.frameIndex); landmarkIds.push(landmarkId);
+      const a = reference.features.keypoints[point.match.referenceIndex]!; const b = frame.features.keypoints[point.match.currentIndex]!;
+      this.observations.push({ id: `obs:${reference.id}:${frame.id}:${index}:a`, keyframeId: reference.id, landmarkId, x: a.x, y: a.y }, { id: `obs:${reference.id}:${frame.id}:${index}:b`, keyframeId: frame.id, landmarkId, x: b.x, y: b.y });
+    }
+    const currentMap = this.map.snapshot();
+    const updatedMap = { ...currentMap, keyframes: currentMap.keyframes.map((keyframe) => keyframe.id === frame.id ? { ...keyframe, landmarkIds } : keyframe) };
+    if (!this.map.commitSnapshot(currentMap.version, updatedMap)) throw new Error("Capture map changed while committing frame.");
+    this.reference = frame; this.referencePose = pose;
+    this.session = createReconstructionSession(this.map.snapshot(), this.poses.snapshot(), this.observations, { intrinsics: this.options.intrinsics, distortion: this.options.distortion }, frame.timestampMs);
+    return { accepted: true, reason: "tracked", confidence, session: this.session };
+  }
+  snapshot(): ReconstructionSessionSnapshot | undefined { return this.session; }
+  reset(): void { this.map.clear(); this.reference = undefined; this.referencePose = undefined; this.observations = []; this.session = undefined; }
+}
