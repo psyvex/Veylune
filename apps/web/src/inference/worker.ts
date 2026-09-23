@@ -1,16 +1,19 @@
-import { estimateFrameQuality } from "./quality";
+import { estimateRgbaQuality } from "./quality";
 import type { InferenceWorkerRequest } from "./worker-protocol";
 
-export function handleInferenceMessage(request: InferenceWorkerRequest): void {
-  if (request.type !== "run") return;
+export interface QualityWorkerRequest {
+  readonly type: "quality";
+  readonly jobId: string;
+  readonly width: number;
+  readonly height: number;
+  readonly pixels: ArrayBuffer;
+}
 
-  // The worker protocol is ready for a real model runtime. Until a verified
-  // model adapter is installed, deterministic image-quality analysis is used
-  // instead of pretending that a model is available.
-  const bytes = new Uint8Array(request.input);
-  const rgbaLength = Math.floor(bytes.length / 4) * 4;
-  if (rgbaLength === 0) return;
+export function handleInferenceMessage(request: InferenceWorkerRequest | QualityWorkerRequest): void {
+  if (request.type !== "quality") return;
 
-  const pixels = new ImageData(new Uint8ClampedArray(bytes.buffer, bytes.byteOffset, rgbaLength), Math.max(1, Math.floor(Math.sqrt(rgbaLength / 4))), 0);
-  void estimateFrameQuality({ width: pixels.width, height: pixels.height, pixels });
+  // This deterministic baseline is intentionally model-free. A verified model
+  // adapter can replace it without changing the worker boundary.
+  const signal = estimateRgbaQuality(new Uint8Array(request.pixels), request.width, request.height);
+  void signal;
 }
