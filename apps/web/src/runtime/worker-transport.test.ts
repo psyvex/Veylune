@@ -8,11 +8,15 @@ class FakeWorker {
   terminated = false;
 
   postMessage(message: unknown): void { this.messages.push(message); }
-  addEventListener(type: "message" | "error", listener: (event: MessageEvent | ErrorEvent) => void): void {
+  addEventListener(type: "message", listener: (event: MessageEvent) => void): void;
+  addEventListener(type: "error", listener: (event: ErrorEvent) => void): void;
+  addEventListener(type: "message" | "error", listener: ((event: MessageEvent) => void) | ((event: ErrorEvent) => void)): void {
     if (type === "message") this.messageListeners.push(listener as (event: MessageEvent) => void);
     else this.errorListeners.push(listener as (event: ErrorEvent) => void);
   }
-  removeEventListener(type: "message" | "error", listener: (event: MessageEvent | ErrorEvent) => void): void {
+  removeEventListener(type: "message", listener: (event: MessageEvent) => void): void;
+  removeEventListener(type: "error", listener: (event: ErrorEvent) => void): void;
+  removeEventListener(type: "message" | "error", listener: ((event: MessageEvent) => void) | ((event: ErrorEvent) => void)): void {
     if (type === "message") this.messageListeners = this.messageListeners.filter((candidate) => candidate !== listener);
     else this.errorListeners = this.errorListeners.filter((candidate) => candidate !== listener);
   }
