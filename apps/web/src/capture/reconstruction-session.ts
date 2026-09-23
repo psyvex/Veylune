@@ -12,7 +12,6 @@ export function validateReconstructionSession(snapshot: ReconstructionSessionSna
   if (snapshot.schemaVersion !== 3 || !Number.isFinite(snapshot.createdAtMs) || !hasUsableIntrinsics(snapshot.calibration.intrinsics)) return false;
   const distortion = snapshot.calibration.distortion;
   if (![distortion.k1, distortion.k2, distortion.k3, distortion.p1, distortion.p2].every(Number.isFinite)) return false;
-  if (snapshot.map.landmarks.length === 0 && snapshot.map.keyframes.length > 0) return false;
   const keyframes = new Set(snapshot.map.keyframes.map((keyframe) => keyframe.id));
   const landmarks = new Set(snapshot.map.landmarks.map((landmark) => landmark.id));
   if (snapshot.poses.poses.some((pose) => !keyframes.has(pose.id))) return false;
