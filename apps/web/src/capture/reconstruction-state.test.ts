@@ -7,7 +7,7 @@ function session() {
   const map = { version: 1, landmarks: [{ id: "lm", x: 0, y: 0, z: 2, observations: 1, lastSeenFrame: 0 }], keyframes: [{ id: "kf", frameIndex: 0, timestampMs: 1, landmarkIds: ["lm"] }] };
   const poses = new PoseGraph();
   poses.add({ id: "kf", frameIndex: 0, timestampMs: 1, pose: identityCameraPose(), fixed: true });
-  return createReconstructionSession(map, poses.snapshot(), [{ id: "obs", keyframeId: "kf", landmarkId: "lm", x: 10, y: 10 }], 1);
+  return createReconstructionSession(map, poses.snapshot(), [{ id: "obs", keyframeId: "kf", landmarkId: "lm", x: 10, y: 10 }], undefined, 1);
 }
 
 describe("reconstruction state store", () => {
