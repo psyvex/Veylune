@@ -1,4 +1,4 @@
-import type { BundleProblem, CameraBlock } from "./bundle-problem";
+import type { BundleProblem, CameraBlock, BundleResidual } from "./bundle-problem";
 import type { Landmark } from "./map";
 import { applySE3Increment, type Mat3 } from "./se3";
 import { computeBundleResiduals } from "./bundle-problem";
@@ -7,8 +7,8 @@ export interface ObservationLinearization {
   readonly cameraId: string;
   readonly landmarkId: string;
   readonly residual: readonly [number, number];
-  readonly cameraJacobian: Float64Array;
-  readonly landmarkJacobian: Float64Array;
+  readonly cameraJacobian: Float64Array; // row-major 2 x 6
+  readonly landmarkJacobian: Float64Array; // row-major 2 x 3
   readonly valid: boolean;
 }
 
@@ -18,93 +18,76 @@ export interface BundleLinearization {
   readonly landmarkIds: readonly string[];
 }
 
-export interface LinearizationOptions {
-  readonly epsilonRotation: number;
-  readonly epsilonTranslation: number;
-  readonly epsilonLandmark: number;
-}
+const DEFAULT_EPSILON = 1e-6;
 
-const DEFAULT_OPTIONS: LinearizationOptions = {
-  epsilonRotation: 1e-6,
-  epsilonTranslation: 1e-6,
-  epsilonLandmark: 1e-6,
-};
-
-export function linearizeBundle(
-  problem: BundleProblem,
-  options: LinearizationOptions = DEFAULT_OPTIONS,
-): BundleLinearization {
-  const cameraIds = problem.cameras.filter((camera) => !camera.fixed).map((camera) => camera.id);
+export function linearizeBundle(problem: BundleProblem, epsilon = DEFAULT_EPSILON): BundleLinearization {
+  if (!Number.isFinite(epsilon) || epsilon <= 0) throw new Error("Linearization epsilon must be positive.");
+  const cameras = problem.cameras.filter((camera) => !camera.fixed);
+  const cameraIds = cameras.map((camera) => camera.id);
   const landmarkIds = problem.landmarks.map((landmark) => landmark.id);
-  const base = computeBundleResiduals(problem);
   const observations: ObservationLinearization[] = [];
+  const cameraMap = new Map(problem.cameras.map((camera) => [camera.id, camera]));
+  const landmarkMap = new Map(problem.landmarks.map((landmark) => [landmark.id, landmark]));
 
-  for (let index = 0; index < problem.observations.length; index += 1) {
-    const observation = problem.observations[index]!;
-    const baseResidual = base[index]!;
-    if (!baseResidual.valid) continue;
-
-    const camera = problem.cameras.find((candidate) => candidate.id === observation.cameraId);
-    const landmark = problem.landmarks.find((candidate) => candidate.id === observation.landmarkId);
+  for (const observation of problem.observations) {
+    const camera = cameraMap.get(observation.cameraId);
+    const landmark = landmarkMap.get(observation.landmarkId);
     if (!camera || !landmark) continue;
+    const base = residualFor(problem, camera, landmark);
+    if (!base) {
+      observations.push({ cameraId: camera.id, landmarkId: landmark.id, residual: [0, 0], cameraJacobian: new Float64Array(12), landmarkJacobian: new Float64Array(6), valid: false });
+      continue;
+    }
 
     const cameraJacobian = new Float64Array(12);
     if (!camera.fixed) {
-      for (let parameter = 0; parameter < 6; parameter += 1) {
-        const perturbed = perturbCamera(problem, camera, parameter, parameter < 3 ? options.epsilonRotation : options.epsilonTranslation);
-        const residual = computeBundleResiduals(perturbed).find((candidate) => candidate.cameraId === camera.id && candidate.landmarkId === landmark.id);
-        if (!residual?.valid) continue;
-        const epsilon = parameter < 3 ? options.epsilonRotation : options.epsilonTranslation;
-        cameraJacobian[parameter * 2] = (residual.residualX - baseResidual.residualX) / epsilon;
-        cameraJacobian[parameter * 2 + 1] = (residual.residualY - baseResidual.residualY) / epsilon;
+      for (let column = 0; column < 6; column += 1) {
+        const plus = perturbCamera(camera, column, epsilon);
+        const minus = perturbCamera(camera, column, -epsilon);
+        const plusResidual = residualFor(problem, plus, landmark);
+        const minusResidual = residualFor(problem, minus, landmark);
+        if (!plusResidual || !minusResidual) continue;
+        cameraJacobian[column] = (plusResidual[0] - minusResidual[0]) / (2 * epsilon);
+        cameraJacobian[6 + column] = (plusResidual[1] - minusResidual[1]) / (2 * epsilon);
       }
     }
 
     const landmarkJacobian = new Float64Array(6);
-    for (let parameter = 0; parameter < 3; parameter += 1) {
-      const perturbed = perturbLandmark(problem, landmark, parameter, options.epsilonLandmark);
-      const residual = computeBundleResiduals(perturbed).find((candidate) => candidate.cameraId === camera.id && candidate.landmarkId === landmark.id);
-      if (!residual?.valid) continue;
-      landmarkJacobian[parameter * 2] = (residual.residualX - baseResidual.residualX) / options.epsilonLandmark;
-      landmarkJacobian[parameter * 2 + 1] = (residual.residualY - baseResidual.residualY) / options.epsilonLandmark;
+    for (let column = 0; column < 3; column += 1) {
+      const plus = perturbLandmark(landmark, column, epsilon);
+      const minus = perturbLandmark(landmark, column, -epsilon);
+      const plusResidual = residualFor(problem, camera, plus);
+      const minusResidual = residualFor(problem, camera, minus);
+      if (!plusResidual || !minusResidual) continue;
+      landmarkJacobian[column] = (plusResidual[0] - minusResidual[0]) / (2 * epsilon);
+      landmarkJacobian[3 + column] = (plusResidual[1] - minusResidual[1]) / (2 * epsilon);
     }
 
-    observations.push({
-      cameraId: camera.id,
-      landmarkId: landmark.id,
-      residual: [baseResidual.residualX, baseResidual.residualY],
-      cameraJacobian,
-      landmarkJacobian,
-      valid: true,
-    });
+    const valid = [...base, ...cameraJacobian, ...landmarkJacobian].every(Number.isFinite);
+    observations.push({ cameraId: camera.id, landmarkId: landmark.id, residual: base, cameraJacobian, landmarkJacobian, valid });
   }
 
   return { observations, cameraIds, landmarkIds };
 }
 
-function perturbCamera(problem: BundleProblem, target: CameraBlock, parameter: number, epsilon: number): BundleProblem {
-  const increment = parameter < 3
-    ? { rotation: unit(parameter, epsilon), translation: [0, 0, 0] as const }
-    : { rotation: [0, 0, 0] as const, translation: unit(parameter - 3, epsilon) };
-  return {
-    ...problem,
-    cameras: problem.cameras.map((camera) => {
-      if (camera.id !== target.id) return camera;
-      const updated = applySE3Increment(camera.pose.rotation as Mat3, camera.pose.translation, increment);
-      return { ...camera, pose: updated };
-    }),
-  };
+function residualFor(problem: BundleProblem, camera: CameraBlock, landmark: Landmark): readonly [number, number] | undefined {
+  const residual = computeBundleResiduals({ ...problem, cameras: problem.cameras.map((candidate) => candidate.id === camera.id ? camera : candidate), landmarks: problem.landmarks.map((candidate) => candidate.id === landmark.id ? landmark : candidate), observations: problem.observations.filter((observation) => observation.cameraId === camera.id && observation.landmarkId === landmark.id) });
+  const first: BundleResidual | undefined = residual[0];
+  return first?.valid ? [first.residualX, first.residualY] : undefined;
 }
 
-function perturbLandmark(problem: BundleProblem, target: Landmark, parameter: number, epsilon: number): BundleProblem {
-  return {
-    ...problem,
-    landmarks: problem.landmarks.map((landmark) => landmark.id === target.id
-      ? { ...landmark, x: landmark.x + (parameter === 0 ? epsilon : 0), y: landmark.y + (parameter === 1 ? epsilon : 0), z: landmark.z + (parameter === 2 ? epsilon : 0) }
-      : landmark),
+function perturbCamera(camera: CameraBlock, column: number, amount: number): CameraBlock {
+  const rotation = camera.pose.rotation as Mat3;
+  const increment = {
+    rotation: [column === 0 ? amount : 0, column === 1 ? amount : 0, column === 2 ? amount : 0] as const,
+    translation: [column === 3 ? amount : 0, column === 4 ? amount : 0, column === 5 ? amount : 0] as const,
   };
+  const next = applySE3Increment(rotation, camera.pose.translation, increment);
+  return { ...camera, pose: next };
 }
 
-function unit(index: number, epsilon: number): readonly [number, number, number] {
-  return index === 0 ? [epsilon, 0, 0] : index === 1 ? [0, epsilon, 0] : [0, 0, epsilon];
+function perturbLandmark(landmark: Landmark, column: number, amount: number): Landmark {
+  const next = [landmark.x, landmark.y, landmark.z];
+  next[column] += amount;
+  return { ...landmark, x: next[0]!, y: next[1]!, z: next[2]! };
 }
