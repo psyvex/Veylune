@@ -1,15 +1,25 @@
 import { ScheduledOptimizationController } from "./optimization-controller";
-import type { ReconstructionController, ReconstructionControllerResult } from "./reconstruction-controller";
+import type { ReconstructionController, ReconstructionControllerProgress, ReconstructionControllerResult } from "./reconstruction-controller";
 export type OptimizationPhase = "idle" | "pending" | "running" | "success" | "error";
-export interface OptimizationBridgeState { readonly phase: OptimizationPhase; readonly version: number; readonly lastOptimizedVersion: number; readonly lastError?: unknown; }
+export interface OptimizationBridgeState { readonly phase: OptimizationPhase; readonly version: number; readonly lastOptimizedVersion: number; readonly progress: number; readonly iteration: number; readonly totalIterations: number; readonly cost?: number; readonly lastError?: unknown; }
 export interface OptimizationBridgeOptions { readonly maxIterations?: number; readonly debounceMs?: number; readonly minimumIntervalMs?: number; readonly onResult?: (result: ReconstructionControllerResult) => void; readonly onError?: (error: unknown) => void; readonly onState?: (state: OptimizationBridgeState) => void; }
 export class ReconstructionOptimizationBridge {
-  private readonly scheduler: ScheduledOptimizationController; private version = 0; private lastOptimizedVersion = 0; private phase: OptimizationPhase = "idle"; private lastError: unknown; private readonly onState?: (state: OptimizationBridgeState) => void;
-  constructor(controller: ReconstructionController, options: OptimizationBridgeOptions = {}) { this.onState = options.onState; this.scheduler = new ScheduledOptimizationController(controller, { ...options, onState: (phase) => { if (phase === "pending" && this.phase !== "running") this.setState("pending"); else if (phase === "running") this.setState("running"); else if (phase === "idle" && this.phase === "running") this.setState("idle"); }, onResult: (result) => { this.lastOptimizedVersion = this.version; this.setState("success"); options.onResult?.(result); }, onError: (error) => { this.lastError = error; this.setState("error"); options.onError?.(error); } }); }
-  notifyKeyframeInserted(): number { this.version += 1; this.lastError = undefined; this.setState("pending"); this.scheduler.request(this.version); return this.version; }
+  private readonly scheduler: ScheduledOptimizationController; private version = 0; private lastOptimizedVersion = 0; private phase: OptimizationPhase = "idle"; private progress = 0; private iteration = 0; private totalIterations = 0; private cost?: number; private lastError: unknown; private readonly onState?: (state: OptimizationBridgeState) => void;
+  constructor(controller: ReconstructionController, options: OptimizationBridgeOptions = {}) {
+    this.onState = options.onState;
+    this.scheduler = new ScheduledOptimizationController(controller, {
+      ...options,
+      onProgress: (value) => this.handleProgress(value),
+      onState: (phase) => { if (phase === "pending" && this.phase !== "running") this.setState("pending"); else if (phase === "running") this.setState("running"); else if (phase === "idle" && this.phase === "running") this.setState("idle"); },
+      onResult: (result) => { this.lastOptimizedVersion = this.version; this.progress = 1; this.setState("success"); options.onResult?.(result); },
+      onError: (error) => { this.lastError = error; this.setState("error"); options.onError?.(error); },
+    });
+  }
+  notifyKeyframeInserted(): number { this.version += 1; this.lastError = undefined; this.progress = 0; this.iteration = 0; this.totalIterations = 0; this.cost = undefined; this.setState("pending"); this.scheduler.request(this.version); return this.version; }
   cancel(): void { this.scheduler.cancel(); this.setState("idle"); }
   dispose(): void { this.scheduler.dispose(); this.setState("idle"); }
   get isRunning(): boolean { return this.scheduler.isRunning; } get hasPendingWork(): boolean { return this.scheduler.hasPendingWork; } get currentVersion(): number { return this.version; }
-  get state(): OptimizationBridgeState { return { phase: this.phase, version: this.version, lastOptimizedVersion: this.lastOptimizedVersion, lastError: this.lastError }; }
+  get state(): OptimizationBridgeState { return { phase: this.phase, version: this.version, lastOptimizedVersion: this.lastOptimizedVersion, progress: this.progress, iteration: this.iteration, totalIterations: this.totalIterations, cost: this.cost, lastError: this.lastError }; }
+  private handleProgress(progress: ReconstructionControllerProgress): void { this.progress = progress.fraction; this.iteration = progress.completed; this.totalIterations = progress.total; this.setState("running"); }
   private setState(phase: OptimizationPhase): void { this.phase = phase; this.onState?.(this.state); }
 }
