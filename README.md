@@ -4,6 +4,8 @@ Production-grade, local-first 3D reconstruction and creative engine.
 
 Veylune is a browser-first system for reconstructing detailed 3D representations from user-provided images, with room to expand into animation, scene creation, rendering, and export workflows.
 
+The web capture workspace provides a live camera preview, plain-language tracking guidance, and a responsive map-refinement panel with progress, cost, and cancellation feedback. Capture continues while map refinement runs in the background.
+
 ## Architecture
 
 - Rust core for geometry, reconstruction, numerical processing, and future physics.
