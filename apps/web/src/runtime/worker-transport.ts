@@ -10,7 +10,17 @@ export class WorkerJobTransport<TInput, TOutput> implements JobTransport<TInput,
   private readonly onErrorBound = (event: ErrorEvent): void => this.onWorkerError(event);
   constructor(private readonly worker: WorkerPort) { worker.addEventListener("message", this.onMessageBound); worker.addEventListener("error", this.onErrorBound); }
   async submit(request: JobRequest<TInput>): Promise<void> { if (!isValidId(request.id) || !request.operation || this.active.has(request.id)) throw new Error("Invalid or duplicate job request."); this.active.set(request.id, "running"); try { this.worker.postMessage({ type: "submit", request }); } catch (error) { this.active.delete(request.id); throw error; } }
-  async cancel(id: string): Promise<void> { if (!isValidId(id)) throw new Error("Invalid job id."); const state = this.active.get(id); if (!state) return; if (state === "cancelling") return; this.active.set(id, "cancelling"); try { this.worker.postMessage({ type: "cancel", id }); } catch (error) { this.active.set(id, "running"); throw error; } }
+  async cancel(id: string): Promise<void> {
+    if (!isValidId(id)) throw new Error("Invalid job id.");
+    const state = this.active.get(id);
+    if (!state) return;
+    if (state === "cancelling") return;
+    this.active.delete(id);
+    try { this.worker.postMessage({ type: "cancel", id }); }
+    catch (error) { this.active.set(id, "running"); throw error; }
+    const status: JobStatus = { id, state: "cancelled", progress: { completed: 0, total: 0 } };
+    this.emit({ type: "failed", status });
+  }
   subscribe(listener: (event: JobEvent<TOutput>) => void): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
   dispose(): void { this.worker.removeEventListener("message", this.onMessageBound); this.worker.removeEventListener("error", this.onErrorBound); this.listeners.clear(); this.active.clear(); this.worker.terminate?.(); }
   private onMessage(message: unknown): void { if (!isWorkerMessage<TOutput>(message)) return; const id = message.status.id; if (!this.active.has(id)) return; if (message.type === "completed" || message.type === "failed" || message.type === "cancelled") this.active.delete(id); if (message.type === "cancelled") { const event: JobEvent<TOutput> = { type: "failed", status: { ...message.status, state: "cancelled" } }; this.emit(event); return; } this.emit(message as JobEvent<TOutput>); }
