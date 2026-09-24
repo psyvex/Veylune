@@ -3,14 +3,14 @@ import {
   applyDragDelta,
   FULL_TURN,
   mountSpatialScene,
-  PITCH_MAX,
-  PITCH_MIN,
+  PITCH_DRAG_SENSITIVITY,
   projector,
   YAW_DRAG_SENSITIVITY,
 } from "./spatial-scene";
 
 const INITIAL_YAW = -0.52;
 const INITIAL_PITCH = 0.14;
+const DEG = Math.PI / 180;
 
 let activeDispose: (() => void) | undefined;
 
@@ -70,8 +70,8 @@ describe("applyDragDelta (pure orbit math)", () => {
   it("raises elevation when dragged up and lowers it when dragged down", () => {
     const up = applyDragDelta(0, 0, 0, -100); // deltaY < 0 = drag up
     const down = applyDragDelta(0, 0, 0, 100); // deltaY > 0 = drag down
-    expect(up.pitch).toBeGreaterThan(0);
-    expect(down.pitch).toBeLessThan(0);
+    expect(up.pitch).toBeCloseTo(100 * PITCH_DRAG_SENSITIVITY, 10);
+    expect(down.pitch).toBeCloseTo(-100 * PITCH_DRAG_SENSITIVITY, 10);
   });
 
   it("winds yaw in the drag direction with no horizontal limit", () => {
@@ -82,24 +82,39 @@ describe("applyDragDelta (pure orbit math)", () => {
     expect(pitch).toBeCloseTo(0, 6);
   });
 
-  it("keeps pitch inside its limits without touching yaw", () => {
+  it("accumulates vertical rotation past 90°, 180° and a full 360° (no clamp)", () => {
     let pitch = 0;
-    for (let step = 0; step < 200; step += 1) ({ pitch } = applyDragDelta(0, pitch, 0, -1000));
-    expect(pitch).toBe(PITCH_MAX);
-    for (let step = 0; step < 200; step += 1) ({ pitch } = applyDragDelta(0, pitch, 0, 1000));
-    expect(pitch).toBe(PITCH_MIN);
+    const milestones = new Set<string>();
+    // One long continuous upward drag: each step is a small deltaY < 0.
+    for (let step = 0; step < 200; step += 1) {
+      ({ pitch } = applyDragDelta(0, pitch, 0, -30));
+      const degrees = (pitch * 180) / Math.PI;
+      for (const m of [90, 180, 270, 360, 450] as const) {
+        if (degrees >= m) milestones.add(String(m));
+      }
+    }
+    const degrees = (pitch * 180) / Math.PI;
+    expect(degrees).toBeGreaterThan(450); // reached past a full vertical revolution
+    expect(pitch).toBeGreaterThan(Math.PI); // past 180° of raw radians
+    expect([...milestones].sort((a, b) => Number(a) - Number(b))).toEqual(["90", "180", "270", "360", "450"]);
   });
 
-  it("maps pitch monotonically downward across a downward drag", () => {
-    let pitch = PITCH_MAX;
-    const samples = [pitch];
-    for (let step = 0; step < 40; step += 1) {
-      ({ pitch } = applyDragDelta(0, pitch, 0, 20));
-      samples.push(pitch);
-    }
-    for (let index = 1; index < samples.length; index += 1) {
-      expect(samples[index]).toBeLessThanOrEqual(samples[index - 1]!);
-    }
+  it("reverses vertical rotation continuously (up then down)", () => {
+    let pitch = 0;
+    for (let step = 0; step < 40; step += 1) ({ pitch } = applyDragDelta(0, pitch, 0, -40)); // up
+    const peak = pitch;
+    expect(peak).toBeGreaterThan(Math.PI); // went well past 180°
+    for (let step = 0; step < 20; step += 1) ({ pitch } = applyDragDelta(0, pitch, 0, 40)); // back down
+    expect(pitch).toBeLessThan(peak);
+    expect(pitch).toBeGreaterThan(0); // still positive: moved down from the peak, monotonically
+  });
+
+  it("accumulates both axes at once", () => {
+    let yaw = 0;
+    let pitch = 0;
+    for (let step = 0; step < 30; step += 1) ({ yaw, pitch } = applyDragDelta(yaw, pitch, 120, -120));
+    expect(yaw).toBeGreaterThan(FULL_TURN); // horizontal still winds fully
+    expect(pitch).toBeGreaterThan(Math.PI / 2); // vertical winds up past 90°
   });
 });
 
@@ -144,28 +159,57 @@ describe("grab-and-drag interaction (mountSpatialScene pipeline)", () => {
     expect(swept).toBeGreaterThan(FULL_TURN * 3); // kept dragging, kept winding
   });
 
-  it("tilts up on up-drag and down on down-drag (regression: vertical was inverted)", () => {
+  it("accumulates a full vertical revolution while held (no elevation freeze)", () => {
+    const { canvas, pose } = mountScene();
+    const start = pose();
+    fire(canvas, "pointerdown", { clientX: 300, clientY: 4000 });
+    let maxPitch = start.pitch;
+    for (let step = 1; step <= 20; step += 1) {
+      fire(canvas, "pointermove", { clientX: 300, clientY: 4000 - step * 400 }); // keep dragging up
+      maxPitch = Math.max(maxPitch, pose().pitch);
+    }
+    const swept = maxPitch - start.pitch;
+    expect(swept).toBeGreaterThan(FULL_TURN); // past 360° of vertical rotation
+    expect(maxPitch).toBeGreaterThan(Math.PI); // past 180°
+  });
+
+  it("tilts up on up-drag and down on down-drag, and reverses (regression: was clamped/inverted)", () => {
+    const { canvas, pose } = mountScene();
+    fire(canvas, "pointerdown", { clientX: 300, clientY: 3000 });
+    for (let step = 1; step <= 15; step += 1) fire(canvas, "pointermove", { clientX: 300, clientY: 3000 - step * 300 }); // drag up
+    const upPitch = pose().pitch;
+    expect(upPitch).toBeGreaterThan(INITIAL_PITCH);
+    expect(upPitch).toBeGreaterThan(Math.PI); // kept going past 180°, no clamp
+
+    fire(canvas, "pointerup", { clientX: 300, clientY: 3000 - 15 * 300 });
+    fire(canvas, "pointerdown", { clientX: 300, clientY: 0 });
+    for (let step = 1; step <= 10; step += 1) fire(canvas, "pointermove", { clientX: 300, clientY: step * 300 }); // drag down
+    expect(pose().pitch).toBeLessThan(upPitch); // reversed direction, moving back down
+  });
+
+  it("keeps horizontal 360° intact while vertical passes a full turn", () => {
+    const { canvas, pose } = mountScene();
+    fire(canvas, "pointerdown", { clientX: 300, clientY: 4000 });
+    for (let step = 1; step <= 16; step += 1) fire(canvas, "pointermove", { clientX: step * 500, clientY: 4000 - step * 350 }); // diagonal
+    const { yaw, pitch } = pose();
+    expect(yaw - INITIAL_YAW).toBeGreaterThan(FULL_TURN); // horizontal full turn
+    expect(pitch - INITIAL_PITCH).toBeGreaterThan(FULL_TURN); // vertical full turn, simultaneously
+  });
+
+  it("continues rotating while the pointer moves outside the element (capture keeps drag alive)", () => {
     const { canvas, pose } = mountScene();
     fire(canvas, "pointerdown", { clientX: 300, clientY: 200 });
-    fire(canvas, "pointermove", { clientX: 300, clientY: 150 }); // drag up 50px
-    const upPitch = pose().pitch;
-
-    fire(canvas, "pointerup", { clientX: 300, clientY: 150 });
-    fire(canvas, "pointerdown", { clientX: 300, clientY: 200 });
-    fire(canvas, "pointermove", { clientX: 300, clientY: 260 }); // drag down 60px
-    const downPitch = pose().pitch;
-
-    expect(upPitch).toBeGreaterThan(INITIAL_PITCH);
-    expect(downPitch).toBeLessThan(INITIAL_PITCH);
+    fire(canvas, "pointermove", { clientX: 300, clientY: -5000 }); // far above the element
+    expect(pose().pitch).toBeGreaterThan(INITIAL_PITCH); // still rotating, not stopped by leaving
   });
 
   it("stops rotating after release", () => {
     const { canvas, pose } = mountScene();
     fire(canvas, "pointerdown", { clientX: 300, clientY: 200 });
-    fire(canvas, "pointermove", { clientX: 400, clientY: 200 });
-    fire(canvas, "pointerup", { clientX: 400, clientY: 200 });
+    fire(canvas, "pointermove", { clientX: 400, clientY: 100 });
+    fire(canvas, "pointerup", { clientX: 400, clientY: 100 });
     const released = pose();
-    fire(canvas, "pointermove", { clientX: 550, clientY: 200 });
+    fire(canvas, "pointermove", { clientX: 550, clientY: -2000 });
     expect(pose().yaw).toBeCloseTo(released.yaw, 6);
     expect(pose().pitch).toBeCloseTo(released.pitch, 6);
   });
@@ -174,12 +218,13 @@ describe("grab-and-drag interaction (mountSpatialScene pipeline)", () => {
     const { canvas, pose, captured } = mountScene();
     fire(canvas, "pointerdown", { pointerId: 7, clientX: 300, clientY: 200 });
     expect(captured).toContain(7);
-    fire(canvas, "pointermove", { pointerId: 7, clientX: 400, clientY: 200 });
-    fire(canvas, "pointercancel", { pointerId: 7, clientX: 400, clientY: 200 });
+    fire(canvas, "pointermove", { pointerId: 7, clientX: 400, clientY: 100 });
+    fire(canvas, "pointercancel", { pointerId: 7, clientX: 400, clientY: 100 });
     expect(captured).not.toContain(7);
     const cancelled = pose();
-    fire(canvas, "pointermove", { pointerId: 7, clientX: 900, clientY: 200 });
+    fire(canvas, "pointermove", { pointerId: 7, clientX: 900, clientY: -2000 });
     expect(pose().yaw).toBeCloseTo(cancelled.yaw, 6);
+    expect(pose().pitch).toBeCloseTo(cancelled.pitch, 6);
   });
 
   it("captures the pointer for a continued drag and releases it on pointerup", () => {
@@ -195,6 +240,14 @@ describe("grab-and-drag interaction (mountSpatialScene pipeline)", () => {
     fire(canvas, "pointerdown", { pointerId: 9, pointerType: "touch", button: 0, buttons: 1, clientX: 300, clientY: 200 });
     fire(canvas, "pointermove", { pointerId: 9, pointerType: "touch", buttons: 1, clientX: 300, clientY: 140 }); // up
     expect(pose().pitch).toBeGreaterThan(INITIAL_PITCH);
+  });
+
+  it("accumulates a full vertical revolution via arrow keys too (keyboard unclamped)", () => {
+    const { canvas, pose } = mountScene();
+    for (let step = 0; step < 120; step += 1) {
+      canvas.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", cancelable: true }));
+    }
+    expect(pose().pitch - INITIAL_PITCH).toBeGreaterThan(FULL_TURN); // 120 * 0.066 ≈ 7.92 rad > 2π
   });
 
   it("responds to arrow keys consistently with the drag convention", () => {
@@ -213,11 +266,31 @@ describe("grab-and-drag interaction (mountSpatialScene pipeline)", () => {
 });
 
 describe("projector revolution seamlessness", () => {
-  it("returns to the same orientation after a full 360° turn", () => {
+  it("returns to the same orientation after a full horizontal 360° turn", () => {
     const point = { x: 1.2, y: 1.1, z: 0.8 };
     const at0 = projector(600, 400, 0, INITIAL_PITCH)(point);
     const atTurn = projector(600, 400, FULL_TURN, INITIAL_PITCH)(point);
     expect(atTurn.x).toBeCloseTo(at0.x, 6);
     expect(atTurn.y).toBeCloseTo(at0.y, 6);
+  });
+
+  it("returns to the same orientation after a full vertical 360° turn", () => {
+    const point = { x: 1.2, y: 1.1, z: 0.8 };
+    const at0 = projector(600, 400, INITIAL_YAW, 0.3)(point);
+    const atTurn = projector(600, 400, INITIAL_YAW, 0.3 + FULL_TURN)(point);
+    expect(atTurn.x).toBeCloseTo(at0.x, 6);
+    expect(atTurn.y).toBeCloseTo(at0.y, 6);
+    expect(atTurn.depth).toBeCloseTo(at0.depth, 6);
+  });
+
+  it("stays continuous across the 180° vertical crossing (no freeze/flip of the derivative)", () => {
+    const point = { x: 1.2, y: 1.1, z: 0.8 };
+    const step = 0.02;
+    const before = projector(600, 400, 0, Math.PI - step)(point);
+    const at = projector(600, 400, 0, Math.PI)(point);
+    const after = projector(600, 400, 0, Math.PI + step)(point);
+    const gap1 = Math.hypot(at.x - before.x, at.y - before.y);
+    const gap2 = Math.hypot(after.x - at.x, after.y - at.y);
+    expect(gap2).toBeLessThan(gap1 * 2 + 1e-6); // no sudden jump past the limit
   });
 });

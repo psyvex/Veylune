@@ -6,6 +6,17 @@
     <meta name="description" content="A private spatial studio for capturing spaces, refining local maps, and organizing image sets." />
     <meta name="color-scheme" content="dark light" />
     <meta name="theme-color" content="#111310" />
+    <!--
+      One identity, from the lattice in src/branding/voxel-bloom.ts. The PNG tiles
+      are rasterised from that same lattice by scripts/render-brand.mjs rather than
+      downscaled from a large export, so the 16px icon is drawn at 16px from the
+      simplified `micro` geometry that drops the sub-pixel detail.
+    -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="alternate icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <title>Veylune — Spatial capture, made tangible</title>
   </head>
   <body>

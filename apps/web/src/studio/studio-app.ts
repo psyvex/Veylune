@@ -2,6 +2,8 @@ import type { CapabilityProfile } from "../runtime/capabilities";
 import { mountCaptureApp, type CaptureApp } from "../capture/capture-app";
 import { IndexedDbProjectStore } from "../storage/indexeddb";
 import { isSupportedImage, relativeName, StudioProjectService, type ProjectWithAssets } from "./project-service";
+import { mountVeyluneLoader } from "../branding/veylune-loader";
+import { voxelBloomSvg } from "../branding/voxel-bloom";
 
 type Page = "overview" | "projects" | "import" | "capture" | "settings" | "project";
 type Theme = "obsidian" | "glacier" | "moss";
@@ -15,7 +17,7 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
   let activeAssetUrls: string[] = [];
   let disposed = false;
   let theme = readTheme();
-  root.innerHTML = `<div class="studio-shell" data-theme="${theme}"><aside class="studio-sidebar"><a class="studio-brand" href="#/overview" aria-label="Veylune Studio home"><span class="brand-glyph">V</span><span><b>Veylune</b><small>STUDIO</small></span></a><div class="workspace-switch"><span class="workspace-avatar">P</span><span><b>Personal workspace</b><small>Local library</small></span><span class="switch-chevron">⌄</span></div><nav class="studio-nav" aria-label="Main navigation"><p class="nav-caption">WORKSPACE</p>${NAV.map((item) => `<a href="#/${item.route}" data-nav="${item.route}"><span class="nav-icon" aria-hidden="true">${item.icon}</span>${item.label}<span class="nav-active-mark"></span></a>`).join("")}<p class="nav-caption nav-caption-tools">TOOLS</p><a href="#/import" data-nav="import"><span class="nav-icon" aria-hidden="true">↥</span>Import images<span class="nav-active-mark"></span></a></nav><div class="sidebar-bottom"><div class="local-storage-note"><span class="storage-pulse"></span><span><b>Private by design</b><small>Files stay in this browser</small></span></div><button class="profile-button" type="button"><span class="profile-avatar">P</span><span><b>Personal</b><small>Local account</small></span><span class="switch-chevron">···</span></button></div></aside><div class="studio-main"><header class="studio-topbar"><div class="breadcrumbs"><span>Workspace</span><span class="breadcrumb-slash">/</span><b data-page-title>Overview</b></div><div class="topbar-actions"><span class="local-pill"><span></span>LOCAL PROJECTS</span><button class="icon-button" type="button" data-action="theme" aria-label="Open appearance settings">◐</button><a class="topbar-cta" href="#/import"><span aria-hidden="true">＋</span> New project</a></div></header><main class="studio-content" id="studio-content" tabindex="-1"></main></div></div>`;
+  root.innerHTML = `<div class="studio-shell" data-theme="${theme}"><aside class="studio-sidebar"><a class="studio-brand" href="#/overview" aria-label="Veylune Studio home"><span class="brand-glyph">${voxelBloomSvg({ variant: "compact" })}</span><span><b>Veylune</b><small>STUDIO</small></span></a><div class="workspace-switch"><span class="workspace-avatar">P</span><span><b>Personal workspace</b><small>Local library</small></span><span class="switch-chevron">⌄</span></div><nav class="studio-nav" aria-label="Main navigation"><p class="nav-caption">WORKSPACE</p>${NAV.map((item) => `<a href="#/${item.route}" data-nav="${item.route}"><span class="nav-icon" aria-hidden="true">${item.icon}</span>${item.label}<span class="nav-active-mark"></span></a>`).join("")}<p class="nav-caption nav-caption-tools">TOOLS</p><a href="#/import" data-nav="import"><span class="nav-icon" aria-hidden="true">↥</span>Import images<span class="nav-active-mark"></span></a></nav><div class="sidebar-bottom"><div class="local-storage-note"><span class="storage-pulse"></span><span><b>Private by design</b><small>Files stay in this browser</small></span></div><button class="profile-button" type="button"><span class="profile-avatar">P</span><span><b>Personal</b><small>Local account</small></span><span class="switch-chevron">···</span></button></div></aside><div class="studio-main"><header class="studio-topbar"><div class="breadcrumbs"><span>Workspace</span><span class="breadcrumb-slash">/</span><b data-page-title>Overview</b></div><div class="topbar-actions"><span class="local-pill"><span></span>LOCAL PROJECTS</span><button class="icon-button" type="button" data-action="theme" aria-label="Open appearance settings">◐</button><a class="topbar-cta" href="#/import"><span aria-hidden="true">＋</span> New project</a></div></header><main class="studio-content" id="studio-content" tabindex="-1"></main></div></div>`;
   const shell = root.querySelector<HTMLElement>(".studio-shell")!;
   const content = root.querySelector<HTMLElement>("#studio-content")!;
   const pageTitle = root.querySelector<HTMLElement>("[data-page-title]")!;
@@ -86,11 +88,22 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
     const error = content.querySelector<HTMLElement>("[data-import-error]")!;
     const button = content.querySelector<HTMLButtonElement>('[data-action="import-submit"]');
     if (!button) return;
-    button.disabled = true; button.innerHTML = `<span class="button-spinner"></span> Saving to this device…`;
+    button.disabled = true;
+    button.innerHTML = `<span data-button-loader></span> Saving to this device…`;
+    // The identity assembling itself, instead of a spinner: it forms once and then
+    // rests for as long as the import takes. The button's own text is the
+    // announcement, so the loader stays out of the accessibility tree.
+    const loader = mountVeyluneLoader(button.querySelector<HTMLElement>("[data-button-loader]")!, {
+      size: "inline",
+      className: "button-loader",
+      announce: false,
+    });
     try {
       const project = await service.importImages(selectedFiles, name);
+      loader.dispose();
       if (!disposed) location.hash = `#/project/${encodeURIComponent(project.id)}`;
     } catch (cause) {
+      loader.dispose();
       error.textContent = cause instanceof Error ? cause.message : "Images could not be saved. Check your browser storage and try again.";
       button.disabled = false; button.innerHTML = "Try again <span>→</span>";
     }

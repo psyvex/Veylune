@@ -1,0 +1,225 @@
+/*
+ * Voxel Bloom presentation: the mark, the loader, and the splash.
+ *
+ * Geometry lives in voxel-bloom.ts and never changes; everything here is timing
+ * and light. Cells carry their own travel vector (`--vb-bloom-x/y`) and their
+ * distance from the core (`--vb-order`), which is what lets one set of rules
+ * drive assembly, bloom and dissolution across every size the mark appears at.
+ *
+ * Two rules this file keeps to:
+ *
+ *  1. The mark is monochrome. Tone is `currentColor` at a per-depth strength, so
+ *     the identity inherits whatever colour its context uses and survives with
+ *     no palette at all. The tone numbers mirror DEPTH_TONE in voxel-bloom.ts,
+ *     which is the source of truth for the rasterised icons.
+ *  2. Nothing spins forever. The primary identity moves as arrival — appear,
+ *     travel, settle, rest — and the only endless motion is an ambient drift
+ *     small enough to read as stillness.
+ */
+
+:root {
+  --voxel-fast: 180ms;
+  --voxel-normal: 340ms;
+  --voxel-slow: 620ms;
+  --voxel-bloom: 720ms;
+  --voxel-settle: 1100ms;
+  --voxel-stagger: 58ms;
+  --voxel-ease-out: cubic-bezier(0.16, 0.84, 0.28, 1);
+  --voxel-ease-settle: cubic-bezier(0.22, 1, 0.36, 1);
+  --voxel-ease-drift: cubic-bezier(0.45, 0, 0.55, 1);
+}
+
+/* ── The mark ─────────────────────────────────────────────────────────── */
+
+.veylune-mark {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* Cells travel outside the box while blooming; clipping them would make the
+     assembly look like it was being cut rather than assembled. */
+  overflow: visible;
+}
+
+.vb-cell {
+  fill: currentColor;
+  --vb-tone: 1;
+  --vb-delay: calc(var(--vb-order, 0) * var(--voxel-stagger));
+  opacity: var(--vb-tone);
+  translate: 0 0;
+  /* `translate` carries the state pose and `transform` carries the ambient
+     drift, so the two compose instead of overwriting each other. */
+  transition:
+    translate var(--voxel-bloom) var(--voxel-ease-settle) var(--vb-delay),
+    opacity var(--voxel-normal) var(--voxel-ease-out) var(--vb-delay);
+}
+
+/* Light, not colour: near cells carry full ink, far cells recede. */
+.vb-cell[data-depth="0"] { --vb-tone: 0.5; }
+.vb-cell[data-depth="1"] { --vb-tone: 0.78; }
+.vb-cell[data-depth="2"] { --vb-tone: 1; }
+.vb-cell[data-tier="secondary"] { --vb-tone: 0.42; }
+
+/* Favicon sizes flatten the tone: at 16px a gradient reads as dirt, not depth. */
+.veylune-mark[data-variant="micro"] .vb-cell[data-depth="0"] { --vb-tone: 0.86; }
+.veylune-mark[data-variant="micro"] .vb-cell[data-depth="1"] { --vb-tone: 0.96; }
+.veylune-mark[data-variant="micro"] .vb-cell[data-tier="secondary"] { --vb-tone: 0.7; }
+.veylune-mark[data-variant="compact"] .vb-cell[data-depth="0"] { --vb-tone: 0.56; }
+.veylune-mark[data-variant="compact"] .vb-cell[data-depth="1"] { --vb-tone: 0.8; }
+
+/*
+ * A: dormant — scattered outward and unseen, the state before anything arrives.
+ * B: bloom   — the same outward pose at full ink: the cells are present but not
+ *              yet in place.
+ * C: formation / D: stable — the structure. Cells rest where the geometry put
+ *              them; the assembly is the transition between the two states, so
+ *              moving a surface from `bloom` to `formation` is what plays it.
+ * E: dissolve — further out than bloom, and gone.
+ */
+.veylune-mark[data-state="dormant"] .vb-cell {
+  translate: calc(var(--vb-bloom-x, 0) * 1.35px) calc(var(--vb-bloom-y, 0) * 1.35px);
+  opacity: 0;
+}
+
+.veylune-mark[data-state="bloom"] .vb-cell {
+  translate: calc(var(--vb-bloom-x, 0) * 1px) calc(var(--vb-bloom-y, 0) * 1px);
+}
+
+.veylune-mark[data-state="formation"] .vb-cell,
+.veylune-mark[data-state="stable"] .vb-cell {
+  translate: 0 0;
+  opacity: var(--vb-tone);
+}
+
+.veylune-mark[data-state="dissolve"] .vb-cell {
+  translate: calc(var(--vb-bloom-x, 0) * 1.9px) calc(var(--vb-bloom-y, 0) * 1.9px);
+  opacity: 0;
+  transition-duration: var(--voxel-slow);
+}
+
+/*
+ * D: stable — the mark at rest is nearly still. Each cell drifts a fraction of
+ * its own size, out of phase with its neighbours, so the volume reads as settled
+ * rather than frozen without ever animating visibly.
+ */
+@keyframes vb-drift {
+  50% {
+    transform: translate(calc(var(--vb-bloom-x, 0) * -0.09px), calc(var(--vb-bloom-y, 0) * -0.13px));
+  }
+}
+
+.veylune-mark[data-state="stable"][data-ambient="true"] .vb-cell {
+  animation: vb-drift 7.5s var(--voxel-ease-drift) infinite;
+  animation-delay: calc(var(--vb-order, 0) * -1.2s);
+}
+
+/* ── The loader ───────────────────────────────────────────────────────── */
+
+/*
+ * The loader is the mark doing its formation once, then breathing. It never
+ * spins: there is no rotation anywhere in this block, and the only repeating
+ * motion is the ambient drift above.
+ */
+.veylune-loader {
+  --vb-size: 44px;
+  display: grid;
+  place-items: center;
+  width: var(--vb-size);
+  height: var(--vb-size);
+  flex: none;
+}
+
+.veylune-loader--inline { --vb-size: 14px; }
+.veylune-loader--compact { --vb-size: 26px; }
+.veylune-loader--default { --vb-size: 44px; }
+.veylune-loader--fullscreen { --vb-size: min(34vw, 168px); }
+
+/* ── The splash ───────────────────────────────────────────────────────── */
+
+.veylune-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 22px;
+  background: var(--vb-splash-bg, #111310);
+  color: var(--vb-splash-ink, #f5f4ef);
+  transition: opacity var(--voxel-settle) var(--voxel-ease-settle);
+}
+
+.veylune-splash.is-leaving {
+  opacity: 0;
+  /* Hand over control while it is still fading. An invisible full-screen overlay
+     that still swallows clicks turns an identity moment into a dead second. */
+  pointer-events: none;
+}
+
+.veylune-splash-word {
+  color: var(--vb-splash-ink, #f5f4ef);
+  font: 9px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.4em;
+  opacity: 0;
+  transition: opacity var(--voxel-slow) var(--voxel-ease-out);
+}
+
+.veylune-splash.is-formed .veylune-splash-word {
+  opacity: 0.62;
+}
+
+/* ── The grab-to-rotate identity object ───────────────────────────────── */
+
+.voxel-object {
+  display: grid;
+  place-items: center;
+  perspective: 900px;
+  cursor: grab;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.voxel-object.is-orbiting {
+  cursor: grabbing;
+}
+
+.voxel-object:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 12px;
+}
+
+.voxel-object-stage {
+  width: 100%;
+  height: 100%;
+  /* No clamped intermediate: the pose written here is the accumulated drag
+     itself, so it runs past 360° on both axes exactly as the drag accumulated it. */
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────────── */
+
+/*
+ * The mark still renders — same geometry, same tone, same position — it simply
+ * never travels. Every state collapses onto the finished mark, so a surface that
+ * drives `data-state` as a script keeps working and keeps its accessible name;
+ * it just stops animating.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .vb-cell {
+    translate: none !important;
+    transform: none !important;
+    opacity: var(--vb-tone) !important;
+    transition: none !important;
+    animation: none !important;
+  }
+
+  /* The object keeps being grabbable, and keeps saying so: reduced motion removes
+     the smoothing that eases it into place, not the rotation the user is asking
+     for. Killing the transform or the grab cursor here would take the interaction
+     away rather than calm it. */
+  .veylune-splash,
+  .veylune-splash-word {
+    transition: none !important;
+  }
+}

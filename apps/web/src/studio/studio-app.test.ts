@@ -53,3 +53,21 @@ describe("Studio navigation and appearance", () => {
 });
 
 function settle(): Promise<void> { return new Promise((resolve) => setTimeout(resolve, 0)); }
+
+describe("Studio identity", () => {
+  it("carries the same mark as the marketing page, in the theme's own colour", async () => {
+    const root = document.createElement("div");
+    document.body.append(root);
+    dispose = mountStudioApp(root, capabilities).dispose;
+    await settle();
+
+    const glyph = root.querySelector<HTMLElement>(".brand-glyph")!;
+    const mark = glyph.querySelector<SVGSVGElement>(".veylune-mark");
+    expect(mark).toBeTruthy();
+    expect(mark!.getAttribute("data-variant")).toBe("compact");
+    // The sidebar link is already named, so the mark must not be read out again,
+    // and the italic "V" it replaced must not still be in the DOM.
+    expect(mark!.getAttribute("aria-hidden")).toBe("true");
+    expect(glyph.textContent?.trim()).toBe("");
+  });
+});

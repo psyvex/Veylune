@@ -1,3 +1,5 @@
+import { applyDragDelta, FULL_TURN, PITCH_DRAG_SENSITIVITY, YAW_DRAG_SENSITIVITY } from "../spatial/drag-orbit";
+
 type Vec3 = { x: number; y: number; z: number };
 type ScreenPoint = { x: number; y: number; depth: number };
 type SceneMode = 0 | 1 | 2;
@@ -12,34 +14,13 @@ const KEYFRAMES: readonly Vec3[] = [
   { x: 0.15, y: 3.25, z: -4.15 },
 ];
 
-export const FULL_TURN = Math.PI * 2;
-export const PITCH_MIN = -0.28;
-export const PITCH_MAX = 0.45;
-export const YAW_DRAG_SENSITIVITY = 0.008;
-export const PITCH_DRAG_SENSITIVITY = 0.0035;
-const ORBIT_SMOOTHING = 0.16;
+// The drag convention itself lives in src/spatial/drag-orbit.ts so that the
+// identity object and the room scan cannot drift apart on sign or range. It is
+// re-exported here because this has always been the module callers and the
+// behavioural tests import it from.
+export { applyDragDelta, FULL_TURN, PITCH_DRAG_SENSITIVITY, YAW_DRAG_SENSITIVITY };
 
-/**
- * Accumulate a grab-and-drag delta into the orbit pose.
- *
- * Screen space has +Y pointing down, so a downward drag is `deltaY > 0`.
- * In this scene's camera convention a LARGER `pitch` means the camera sits
- * higher above the target (camera up vector = (0, cos pitch, -sin pitch)),
- * i.e. the model's visual elevation increases. So elevation must RISE as the
- * pointer RISES (deltaY < 0): pitch therefore increases as deltaY decreases,
- * hence `- deltaY`. (The shipped build used `+ deltaY`, which inverted it.)
- *
- * Yaw is intentionally left unbounded — keep dragging and it keeps winding
- * past a full revolution (360°, 450°, ...). Every 2π is the same orientation
- * (cos/sin in the projector), so repeated revolutions are seamless. Pitch is
- * kept inside [PITCH_MIN, PITCH_MAX]; that limit never touches yaw.
- */
-export function applyDragDelta(yaw: number, pitch: number, deltaX: number, deltaY: number): { yaw: number; pitch: number } {
-  return {
-    yaw: yaw + deltaX * YAW_DRAG_SENSITIVITY,
-    pitch: clamp(pitch - deltaY * PITCH_DRAG_SENSITIVITY, PITCH_MIN, PITCH_MAX),
-  };
-}
+const ORBIT_SMOOTHING = 0.16;
 
 export function mountSpatialScene(canvas: HTMLCanvasElement, options?: { onPose?: (yaw: number, pitch: number) => void }): { setStage(stage: number): void; dispose(): void } {
   const context = canvas.getContext("2d");
@@ -118,8 +99,8 @@ export function mountSpatialScene(canvas: HTMLCanvasElement, options?: { onPose?
     const rotation = event.shiftKey ? 0.24 : 0.12;
     if (event.key === "ArrowLeft") targetYaw -= rotation;
     else if (event.key === "ArrowRight") targetYaw += rotation;
-    else if (event.key === "ArrowUp") targetPitch = clamp(targetPitch + rotation * 0.55, PITCH_MIN, PITCH_MAX);
-    else if (event.key === "ArrowDown") targetPitch = clamp(targetPitch - rotation * 0.55, PITCH_MIN, PITCH_MAX);
+    else if (event.key === "ArrowUp") targetPitch += rotation * 0.55;
+    else if (event.key === "ArrowDown") targetPitch -= rotation * 0.55;
     else return;
     event.preventDefault();
     if (reducedMotion) { yaw = targetYaw; pitch = targetPitch; }
@@ -136,11 +117,13 @@ export function mountSpatialScene(canvas: HTMLCanvasElement, options?: { onPose?
     else startAnimation();
   });
 
+  // No pointerleave handler: pointer capture keeps the drag alive when the
+  // pointer leaves the canvas mid-gesture, so a full revolution can continue
+  // outside the original bounds. Only up/cancel end the grab.
   canvas.addEventListener("pointerdown", onPointerDown);
   canvas.addEventListener("pointermove", onPointerMove);
   canvas.addEventListener("pointerup", onPointerRelease);
   canvas.addEventListener("pointercancel", onPointerRelease);
-  canvas.addEventListener("pointerleave", onPointerRelease);
   canvas.addEventListener("keydown", onKeyDown);
   document.addEventListener("visibilitychange", onVisibilityChange);
   resizeObserver?.observe(canvas);
@@ -161,7 +144,6 @@ export function mountSpatialScene(canvas: HTMLCanvasElement, options?: { onPose?
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerup", onPointerRelease);
       canvas.removeEventListener("pointercancel", onPointerRelease);
-      canvas.removeEventListener("pointerleave", onPointerRelease);
       canvas.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     },
