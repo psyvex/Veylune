@@ -19,7 +19,7 @@ The architecture must support:
 ## 2.2 High-level architecture
 
 ```text
-                         VireForge Studio
+                         Veylune Studio
                                |
           +--------------------+--------------------+
           |                                         |
