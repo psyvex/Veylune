@@ -23,7 +23,8 @@ describe("Veylune marketing page", () => {
     const root = mountPage();
 
     expect(root.querySelector("main h1")?.textContent).toContain("See a space");
-    expect(root.querySelector(".spatial-canvas")?.getAttribute("aria-label")).toContain("Drag to orbit");
+    expect(root.querySelector(".spatial-canvas")?.getAttribute("aria-label")).toContain("Move the cursor to orbit through 360 degrees");
+    expect(root.querySelector(".scene-caption")?.textContent).toContain("MOVE CURSOR TO ORBIT");
     expect(root.querySelector(".marketing-hero")?.querySelector(".hero-intro")).toBeTruthy();
     expect(root.querySelectorAll(".feature-card")).toHaveLength(3);
     expect(root.querySelectorAll('a[href^="/studio#/"]').length).toBeGreaterThanOrEqual(4);
