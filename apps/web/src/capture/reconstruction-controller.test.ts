@@ -5,7 +5,7 @@ import type { JobEvent, JobRequest, JobStatus, JobTransport } from "../runtime/j
 import { identityCameraPose } from "./keyframe-pose";
 
 class ImmediateTransport implements JobTransport<ReconstructionWorkerInput, ReconstructionWorkerOutput> {
-  private listener?: (event: JobEvent<ReconstructionWorkerOutput>) => void;
+  private listener: ((event: JobEvent<ReconstructionWorkerOutput>) => void) | undefined;
   cancelled = false;
   subscribe(listener: (event: JobEvent<ReconstructionWorkerOutput>) => void): () => void { this.listener = listener; return () => { this.listener = undefined; }; }
   async submit(request: JobRequest<ReconstructionWorkerInput>): Promise<void> { const source = request.input.session; const candidate = { ...source, map: { ...source.map, version: source.map.version + 1 }, poses: { ...source.poses, version: source.poses.version + 1 }, createdAtMs: source.createdAtMs + 1 }; const output = { candidate, iterations: 1, initialCost: 2, finalCost: 1 }; this.listener?.({ type: "completed", status: { id: request.id, state: "completed", progress: { completed: 1, total: 1 } }, output }); }

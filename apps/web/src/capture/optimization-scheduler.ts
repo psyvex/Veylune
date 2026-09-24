@@ -8,7 +8,7 @@ export class OptimizationScheduler<T> {
   private readonly now: () => number;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private running = false;
-  private pending?: OptimizationRequest<T>;
+  private pending: OptimizationRequest<T> | undefined;
   private lastStartedAt = Number.NEGATIVE_INFINITY;
   private disposed = false;
 

@@ -12,6 +12,7 @@ export interface ReconstructionOptimizationCommitResult {
 export function optimizeAndCommitReconstruction(store: ReconstructionStateStore, options?: BundleOptimizerOptions): ReconstructionOptimizationCommitResult {
   const snapshot = store.snapshot();
   const result = optimizeReconstructionSession(snapshot, options);
+  if (result.status === "cancelled") return { status: "rejected", initialCost: result.optimization.initialCost, finalCost: result.optimization.finalCost, iterations: result.optimization.iterations };
   if (result.status !== "committed" || !result.candidate) {
     return { status: result.status, initialCost: result.optimization.initialCost, finalCost: result.optimization.finalCost, iterations: result.optimization.iterations };
   }

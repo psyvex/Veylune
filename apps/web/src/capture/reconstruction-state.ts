@@ -21,7 +21,7 @@ function cloneSnapshot(snapshot: ReconstructionSessionSnapshot): ReconstructionS
     schemaVersion: snapshot.schemaVersion,
     createdAtMs: snapshot.createdAtMs,
     calibration: { intrinsics: { ...snapshot.calibration.intrinsics }, distortion: { ...snapshot.calibration.distortion } },
-    map: { version: snapshot.map.version, landmarks: snapshot.map.landmarks.map((landmark) => ({ ...landmark })), keyframes: snapshot.map.keyframes.map((keyframe) => ({ ...keyframe, landmarkIds: [...keyframe.landmarkIds], pose: keyframe.pose ? { rotation: [...keyframe.pose.rotation] as typeof keyframe.pose.rotation, translation: [...keyframe.pose.translation] as typeof keyframe.pose.translation } : undefined })) },
+    map: { version: snapshot.map.version, landmarks: snapshot.map.landmarks.map((landmark) => ({ ...landmark })), keyframes: snapshot.map.keyframes.map((keyframe) => ({ ...keyframe, landmarkIds: [...keyframe.landmarkIds], ...(keyframe.pose ? { pose: { rotation: [...keyframe.pose.rotation] as typeof keyframe.pose.rotation, translation: [...keyframe.pose.translation] as typeof keyframe.pose.translation } } : {}) })) },
     poses: { version: snapshot.poses.version, poses: snapshot.poses.poses.map((pose) => ({ ...pose, pose: { rotation: [...pose.pose.rotation] as typeof pose.pose.rotation, translation: [...pose.pose.translation] as typeof pose.pose.translation } })) },
     observations: snapshot.observations.map((observation) => ({ ...observation })),
   };

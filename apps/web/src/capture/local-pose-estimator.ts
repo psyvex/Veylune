@@ -20,8 +20,8 @@ export interface LocalPoseEstimatorOptions {
 /** Browser-local incremental pose estimate. Translation is intentionally scale-normalized. */
 export class LocalPoseEstimator implements LivePoseEstimator {
   private readonly options: Required<Omit<LocalPoseEstimatorOptions, "intrinsics" | "extractor" | "matcher">> & Pick<LocalPoseEstimatorOptions, "intrinsics" | "extractor" | "matcher">;
-  private previous?: FeatureSet;
-  private current?: CameraPose;
+  private previous: FeatureSet | undefined;
+  private current: CameraPose | undefined;
 
   constructor(options: LocalPoseEstimatorOptions) {
     this.options = {
@@ -97,7 +97,7 @@ function composePose(base: CameraPose, rotation: CameraPose["rotation"], transla
 function multiply3(a: CameraPose["rotation"], b: CameraPose["rotation"]): CameraPose["rotation"] {
   const out = new Array<number>(9).fill(0);
   for (let row = 0; row < 3; row++) for (let col = 0; col < 3; col++) for (let k = 0; k < 3; k++) out[row * 3 + col] += a[row * 3 + k]! * b[k * 3 + col]!;
-  return out as CameraPose["rotation"];
+  return out as unknown as CameraPose["rotation"];
 }
 
 function mean(points: readonly { x: number; y: number }[]): { x: number; y: number } {
