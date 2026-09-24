@@ -2,7 +2,7 @@
 
 ## 5.1 Project philosophy
 
-A VireForge project is a creative document, not merely a mesh.
+A Veylune project is a creative document, not merely a mesh.
 
 It must be possible to reconstruct the editing state without embedding every runtime cache.
 
