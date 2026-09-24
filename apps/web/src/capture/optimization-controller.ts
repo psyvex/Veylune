@@ -1,7 +1,7 @@
 import { OptimizationScheduler, type OptimizationSchedulerOptions } from "./optimization-scheduler";
-import type { ReconstructionController, ReconstructionControllerResult } from "./reconstruction-controller";
+import type { ReconstructionController, ReconstructionControllerProgress, ReconstructionControllerResult } from "./reconstruction-controller";
 
-export interface ScheduledOptimizationOptions extends OptimizationSchedulerOptions { readonly maxIterations?: number; readonly onResult?: (result: ReconstructionControllerResult) => void; readonly onError?: (error: unknown) => void; readonly onState?: (state: "pending" | "running" | "idle") => void; }
+export interface ScheduledOptimizationOptions extends OptimizationSchedulerOptions { readonly maxIterations?: number; readonly onResult?: (result: ReconstructionControllerResult) => void; readonly onError?: (error: unknown) => void; readonly onProgress?: (progress: ReconstructionControllerProgress) => void; readonly onState?: (state: "pending" | "running" | "idle") => void; }
 export class ScheduledOptimizationController {
   private readonly scheduler: OptimizationScheduler<number>;
   constructor(private readonly controller: ReconstructionController, private readonly options: ScheduledOptimizationOptions = {}) {
