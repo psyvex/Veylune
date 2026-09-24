@@ -3,7 +3,7 @@ import type { ReconstructionSessionSnapshot } from "./reconstruction-session";
 export interface ReconstructionWorkerInput { readonly session: ReconstructionSessionSnapshot; readonly maxIterations?: number; }
 export type ReconstructionWorkerOutput = { readonly candidate: ReconstructionSessionSnapshot; readonly iterations: number; readonly initialCost: number; readonly finalCost: number };
 export interface ReconstructionWorkerScope { addEventListener(type: "message", listener: (event: MessageEvent<unknown>) => void): void; postMessage(message: unknown): void; }
-export function executeReconstructionWorker(input: ReconstructionWorkerInput, shouldCancel?: () => boolean, onProgress?: (progress: { iteration: number; total: number; cost: number }) => void): ReconstructionWorkerOutput {
+export function executeReconstructionWorker(input: ReconstructionWorkerInput, shouldCancel?: () => boolean, onProgress?: (progress: { iteration: number; total: number; cost: number; initialCost?: number; improvement?: number }) => void): ReconstructionWorkerOutput {
   const result: ReconstructionOptimizationResult = optimizeReconstructionSession(input.session, { maxIterations: input.maxIterations ?? 5, shouldCancel, onProgress });
   if (result.status === "cancelled") throw new ReconstructionCancelledError();
   if (result.status !== "committed" || !result.candidate) throw new Error(result.status === "insufficient" ? "Reconstruction state is insufficient for optimization." : "Optimization did not produce an improving solution.");
@@ -18,9 +18,13 @@ export function installReconstructionWorker(scope: ReconstructionWorkerScope): v
     if (message?.type !== "submit" || typeof message.id !== "string" || !isInput(message.input)) return;
     const id = message.id;
     try {
-      const output = executeReconstructionWorker(message.input, () => cancelled.has(id), (progress) => scope.postMessage({ type: "progress", status: { id, state: "running", progress: { completed: Math.min(progress.iteration, progress.total), total: progress.total } } }));
-      if (cancelled.has(id)) { cancelled.delete(id); scope.postMessage({ type: "cancelled", status: { id, state: "cancelled", progress: { completed: 0, total: 1 } } }); return; }
-      scope.postMessage({ type: "completed", status: { id, state: "completed", progress: { completed: output.iterations, total: output.iterations } }, output });
+      let initialCost: number | undefined;
+      const output = executeReconstructionWorker(message.input, () => cancelled.has(id), (progress) => {
+        initialCost ??= progress.initialCost;
+        scope.postMessage({ type: "progress", status: { id, state: "running", progress: { completed: Math.min(progress.iteration, progress.total), total: progress.total, cost: progress.cost, initialCost, improvement: initialCost === undefined ? undefined : initialCost - progress.cost } } });
+      });
+      if (cancelled.has(id)) { cancelled.delete(id); scope.postMessage({ type: "cancelled", status: { id, state: "cancelled", progress: { completed: output.iterations, total: output.iterations, cost: output.finalCost, initialCost: output.initialCost, improvement: output.initialCost - output.finalCost } }); return; }
+      scope.postMessage({ type: "completed", status: { id, state: "completed", progress: { completed: output.iterations, total: output.iterations, cost: output.finalCost, initialCost: output.initialCost, improvement: output.initialCost - output.finalCost } }, output });
     } catch (error) {
       const wasCancelled = error instanceof ReconstructionCancelledError || cancelled.has(id); cancelled.delete(id);
       if (wasCancelled) scope.postMessage({ type: "cancelled", status: { id, state: "cancelled", progress: { completed: 0, total: 1 } } });
