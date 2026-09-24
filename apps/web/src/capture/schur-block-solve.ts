@@ -19,6 +19,7 @@ export function solveBundleSchurBlocks(
   }
 
   const reduced = new Float64Array(blocks.camera.values);
+  for (let i = 0; i < cameraSize; i += 1) reduced[i * cameraSize + i] += damping;
   const reducedGradient = new Float64Array(blocks.cameraGradient);
   const landmarkCount = landmarkSize / 3;
   const inverses: Float64Array[] = [];

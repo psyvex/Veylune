@@ -1,9 +1,10 @@
 import type { BundleLinearization } from "./bundle-linearization";
 import type { SchurBlocks } from "./schur-blocks";
+import { HuberLoss } from "./robust-loss";
 
 export function assembleBundleBlocks(
   linearization: BundleLinearization,
-  damping = 1e-6,
+  damping = 0,
 ): SchurBlocks {
   const cameraSize = linearization.cameraIds.length * 6;
   const landmarkSize = linearization.landmarkIds.length * 3;
@@ -14,18 +15,21 @@ export function assembleBundleBlocks(
   const landmarkGradient = new Float64Array(landmarkSize);
   const cameraIndex = new Map(linearization.cameraIds.map((id, index) => [id, index]));
   const landmarkIndex = new Map(linearization.landmarkIds.map((id, index) => [id, index]));
+  const robustLoss = new HuberLoss(2);
 
   for (const observation of linearization.observations) {
+    if (!observation.valid) continue;
     const ci = cameraIndex.get(observation.cameraId);
     const li = landmarkIndex.get(observation.landmarkId);
     if (ci === undefined || li === undefined) continue;
     const cOffset = ci * 6;
     const lOffset = li * 3;
 
+    const weight = robustLoss.weight(observation.residual[0] ** 2 + observation.residual[1] ** 2);
     for (let residual = 0; residual < 2; residual += 1) {
       const r = observation.residual[residual]!;
       for (let a = 0; a < 6; a += 1) {
-        const ja = observation.cameraJacobian[a * 2 + residual]!;
+        const ja = observation.cameraJacobian[a * 2 + residual]! * weight;
         cameraGradient[cOffset + a] += ja * r;
         for (let b = a; b < 6; b += 1) {
           const jb = observation.cameraJacobian[b * 2 + residual]!;
@@ -35,7 +39,7 @@ export function assembleBundleBlocks(
         }
       }
       for (let a = 0; a < 3; a += 1) {
-        const ja = observation.landmarkJacobian[a * 2 + residual]!;
+        const ja = observation.landmarkJacobian[a * 2 + residual]! * weight;
         landmarkGradient[lOffset + a] += ja * r;
         for (let b = a; b < 3; b += 1) {
           const jb = observation.landmarkJacobian[b * 2 + residual]!;

@@ -7,7 +7,7 @@ function session() {
   const first = identityCameraPose(); const second = { ...identityCameraPose(), translation: [0.1, 0, 0] as const };
   const observations = points.flatMap((point) => [
     { id: `${point.id}-a`, keyframeId: "k1", landmarkId: point.id, x: 100 * point.x / point.z + 50, y: 100 * point.y / point.z + 50 },
-    { id: `${point.id}-b`, keyframeId: "k2", landmarkId: point.id, x: 100 * (point.x + 0.1) / point.z + 50.5, y: 100 * point.y / point.z + 50 },
+    { id: `${point.id}-b`, keyframeId: "k2", landmarkId: point.id, x: 100 * (point.x + 0.1) / point.z + 50, y: 100 * point.y / point.z + 50 },
   ]);
   return { schemaVersion: 3 as const, createdAtMs: 1, calibration: { intrinsics: { fx: 100, fy: 100, cx: 50, cy: 50 }, distortion: { k1: 0, k2: 0, k3: 0, p1: 0, p2: 0 } }, map: { version: 0, landmarks: points.map((point) => ({ ...point, observations: 2, lastSeenFrame: 1 })), keyframes: [{ id: "k1", frameIndex: 0, timestampMs: 1, landmarkIds: points.map((point) => point.id) }, { id: "k2", frameIndex: 1, timestampMs: 2, landmarkIds: points.map((point) => point.id) }] }, poses: { version: 0, poses: [{ id: "k1", frameIndex: 0, timestampMs: 1, pose: first, fixed: true }, { id: "k2", frameIndex: 1, timestampMs: 2, pose: second, fixed: false }] }, observations };
 }

@@ -4,6 +4,7 @@ export interface ReconstructionWorkerInput { readonly session: ReconstructionSes
 export type ReconstructionWorkerOutput = { readonly candidate: ReconstructionSessionSnapshot; readonly iterations: number; readonly initialCost: number; readonly finalCost: number };
 export interface ReconstructionWorkerScope { addEventListener(type: "message", listener: (event: MessageEvent<unknown>) => void): void; postMessage(message: unknown): void; }
 export function executeReconstructionWorker(input: ReconstructionWorkerInput, shouldCancel?: () => boolean, onProgress?: (progress: { iteration: number; total: number; cost: number; initialCost?: number; improvement?: number }) => void): ReconstructionWorkerOutput {
+  if (input.maxIterations !== undefined && (!Number.isSafeInteger(input.maxIterations) || input.maxIterations < 1 || input.maxIterations > 100)) throw new Error("Reconstruction iteration budget must be an integer between 1 and 100.");
   const result: ReconstructionOptimizationResult = optimizeReconstructionSession(input.session, { maxIterations: input.maxIterations ?? 5, ...(shouldCancel ? { shouldCancel } : {}), ...(onProgress ? { onProgress } : {}) });
   if (result.status === "cancelled") throw new ReconstructionCancelledError();
   if (result.status !== "committed" || !result.candidate) throw new Error(result.status === "insufficient" ? "Reconstruction state is insufficient for optimization." : "Optimization did not produce an improving solution.");
