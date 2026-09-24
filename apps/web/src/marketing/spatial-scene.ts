@@ -12,7 +12,36 @@ const KEYFRAMES: readonly Vec3[] = [
   { x: 0.15, y: 3.25, z: -4.15 },
 ];
 
-export function mountSpatialScene(canvas: HTMLCanvasElement): { setStage(stage: number): void; dispose(): void } {
+export const FULL_TURN = Math.PI * 2;
+export const PITCH_MIN = -0.28;
+export const PITCH_MAX = 0.45;
+export const YAW_DRAG_SENSITIVITY = 0.008;
+export const PITCH_DRAG_SENSITIVITY = 0.0035;
+const ORBIT_SMOOTHING = 0.16;
+
+/**
+ * Accumulate a grab-and-drag delta into the orbit pose.
+ *
+ * Screen space has +Y pointing down, so a downward drag is `deltaY > 0`.
+ * In this scene's camera convention a LARGER `pitch` means the camera sits
+ * higher above the target (camera up vector = (0, cos pitch, -sin pitch)),
+ * i.e. the model's visual elevation increases. So elevation must RISE as the
+ * pointer RISES (deltaY < 0): pitch therefore increases as deltaY decreases,
+ * hence `- deltaY`. (The shipped build used `+ deltaY`, which inverted it.)
+ *
+ * Yaw is intentionally left unbounded — keep dragging and it keeps winding
+ * past a full revolution (360°, 450°, ...). Every 2π is the same orientation
+ * (cos/sin in the projector), so repeated revolutions are seamless. Pitch is
+ * kept inside [PITCH_MIN, PITCH_MAX]; that limit never touches yaw.
+ */
+export function applyDragDelta(yaw: number, pitch: number, deltaX: number, deltaY: number): { yaw: number; pitch: number } {
+  return {
+    yaw: yaw + deltaX * YAW_DRAG_SENSITIVITY,
+    pitch: clamp(pitch - deltaY * PITCH_DRAG_SENSITIVITY, PITCH_MIN, PITCH_MAX),
+  };
+}
+
+export function mountSpatialScene(canvas: HTMLCanvasElement, options?: { onPose?: (yaw: number, pitch: number) => void }): { setStage(stage: number): void; dispose(): void } {
   const context = canvas.getContext("2d");
   if (!context) return { setStage: () => undefined, dispose: () => undefined };
 
@@ -23,10 +52,11 @@ export function mountSpatialScene(canvas: HTMLCanvasElement): { setStage(stage: 
   let height = 1;
   let pixelRatio = 1;
   let frame = 0;
-  let yaw = -0.52;
-  let pitch = 0.14;
-  let previousPointer: { x: number; y: number } | undefined;
-  let dragging = false;
+  let targetYaw = -0.52;
+  let targetPitch = 0.14;
+  let yaw = targetYaw;
+  let pitch = targetPitch;
+  let press: { pointerId: number; x: number; y: number } | undefined;
   let inView = true;
   let disposed = false;
 
@@ -44,41 +74,55 @@ export function mountSpatialScene(canvas: HTMLCanvasElement): { setStage(stage: 
 
   const render = (now: number): void => {
     if (disposed) return;
+    if (!reducedMotion) {
+      yaw += (targetYaw - yaw) * ORBIT_SMOOTHING;
+      pitch += (targetPitch - pitch) * ORBIT_SMOOTHING;
+    }
     paintScene(context, width, height, now / 1000, mode, yaw, pitch, cloud);
+    options?.onPose?.(yaw, pitch);
     if (!reducedMotion && !document.hidden && inView) frame = requestAnimationFrame(render);
   };
   const startAnimation = (): void => {
     if (!reducedMotion && !document.hidden && inView && !frame) frame = requestAnimationFrame(render);
   };
 
+  // Grab-and-drag orbit: the scene only moves while a primary pointer is held
+  // down. Each move contributes a delta (see applyDragDelta); release/cancel/
+  // leave always clears the grab so the model is never left "held".
+  const commit = (next: { yaw: number; pitch: number }): void => {
+    targetYaw = next.yaw;
+    targetPitch = next.pitch;
+    if (reducedMotion) { yaw = targetYaw; pitch = targetPitch; render(performance.now()); }
+  };
   const onPointerDown = (event: PointerEvent): void => {
-    dragging = true;
-    previousPointer = { x: event.clientX, y: event.clientY };
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    press = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
     canvas.setPointerCapture?.(event.pointerId);
     canvas.classList.add("is-orbiting");
   };
   const onPointerMove = (event: PointerEvent): void => {
-    if (!dragging || !previousPointer) return;
-    const dx = event.clientX - previousPointer.x;
-    const dy = event.clientY - previousPointer.y;
-    yaw += dx * 0.008;
-    pitch = clamp(pitch + dy * 0.0035, -0.28, 0.45);
-    previousPointer = { x: event.clientX, y: event.clientY };
-    if (reducedMotion) render(performance.now());
+    if (!press || press.pointerId !== event.pointerId) return;
+    if (event.pointerType === "mouse" && event.buttons === 0) return;
+    const next = applyDragDelta(targetYaw, targetPitch, event.clientX - press.x, event.clientY - press.y);
+    press.x = event.clientX;
+    press.y = event.clientY;
+    commit(next);
   };
-  const onPointerUp = (): void => {
-    dragging = false;
-    previousPointer = undefined;
+  const onPointerRelease = (event: PointerEvent): void => {
+    if (press && event.pointerId !== press.pointerId) return;
+    if (canvas.hasPointerCapture?.(event.pointerId)) canvas.releasePointerCapture?.(event.pointerId);
+    press = undefined;
     canvas.classList.remove("is-orbiting");
   };
   const onKeyDown = (event: KeyboardEvent): void => {
     const rotation = event.shiftKey ? 0.24 : 0.12;
-    if (event.key === "ArrowLeft") yaw -= rotation;
-    else if (event.key === "ArrowRight") yaw += rotation;
-    else if (event.key === "ArrowUp") pitch = clamp(pitch - rotation * 0.55, -0.28, 0.45);
-    else if (event.key === "ArrowDown") pitch = clamp(pitch + rotation * 0.55, -0.28, 0.45);
+    if (event.key === "ArrowLeft") targetYaw -= rotation;
+    else if (event.key === "ArrowRight") targetYaw += rotation;
+    else if (event.key === "ArrowUp") targetPitch = clamp(targetPitch + rotation * 0.55, PITCH_MIN, PITCH_MAX);
+    else if (event.key === "ArrowDown") targetPitch = clamp(targetPitch - rotation * 0.55, PITCH_MIN, PITCH_MAX);
     else return;
     event.preventDefault();
+    if (reducedMotion) { yaw = targetYaw; pitch = targetPitch; }
     render(performance.now());
   };
   const onVisibilityChange = (): void => {
@@ -94,8 +138,9 @@ export function mountSpatialScene(canvas: HTMLCanvasElement): { setStage(stage: 
 
   canvas.addEventListener("pointerdown", onPointerDown);
   canvas.addEventListener("pointermove", onPointerMove);
-  canvas.addEventListener("pointerup", onPointerUp);
-  canvas.addEventListener("pointercancel", onPointerUp);
+  canvas.addEventListener("pointerup", onPointerRelease);
+  canvas.addEventListener("pointercancel", onPointerRelease);
+  canvas.addEventListener("pointerleave", onPointerRelease);
   canvas.addEventListener("keydown", onKeyDown);
   document.addEventListener("visibilitychange", onVisibilityChange);
   resizeObserver?.observe(canvas);
@@ -114,8 +159,9 @@ export function mountSpatialScene(canvas: HTMLCanvasElement): { setStage(stage: 
       if (!resizeObserver) window.removeEventListener("resize", resize);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointermove", onPointerMove);
-      canvas.removeEventListener("pointerup", onPointerUp);
-      canvas.removeEventListener("pointercancel", onPointerUp);
+      canvas.removeEventListener("pointerup", onPointerRelease);
+      canvas.removeEventListener("pointercancel", onPointerRelease);
+      canvas.removeEventListener("pointerleave", onPointerRelease);
       canvas.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     },
@@ -135,7 +181,7 @@ function paintScene(ctx: CanvasRenderingContext2D, width: number, height: number
   if (mode === 2) drawRefinementPulse(ctx, project, time);
 }
 
-function projector(width: number, height: number, yaw: number, pitch: number): (point: Vec3) => ScreenPoint {
+export function projector(width: number, height: number, yaw: number, pitch: number): (point: Vec3) => ScreenPoint {
   const cosYaw = Math.cos(yaw), sinYaw = Math.sin(yaw);
   const cosPitch = Math.cos(pitch), sinPitch = Math.sin(pitch);
   const focal = Math.min(width * 0.84, height * 1.04);
