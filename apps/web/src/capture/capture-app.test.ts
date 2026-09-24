@@ -6,6 +6,6 @@ const capabilities: CapabilityProfile = { webgpu: "supported", wasm: "supported"
 
 describe("capture app", () => {
   beforeEach(() => { vi.restoreAllMocks(); });
-  it("mounts live scan controls", () => { const root = document.createElement("div"); mountCaptureApp(root, capabilities); expect(root.querySelector("video")).toBeTruthy(); expect(root.querySelector('[data-action=start]')).toBeTruthy(); expect(root.querySelector('[data-action=snapshot]')).toBeTruthy(); expect(root.textContent).toContain("Local-first 3D capture"); });
+  it("mounts live scan controls and optimization telemetry", () => { const root = document.createElement("div"); mountCaptureApp(root, capabilities); expect(root.querySelector("video")).toBeTruthy(); expect(root.querySelector('[data-action=start]')).toBeTruthy(); expect(root.querySelector('[data-action=snapshot]')).toBeTruthy(); expect(root.querySelector('[data-action=cancel-optimization]')).toBeTruthy(); expect(root.querySelector('[data-metric=progress]')).toBeTruthy(); expect(root.querySelector('[data-metric=cost]')).toBeTruthy(); expect(root.textContent).toContain("Local-first 3D capture"); });
   it("cleans up the mounted app", () => { const root = document.createElement("div"); const app = mountCaptureApp(root, capabilities); app.dispose(); expect(root.childElementCount).toBe(0); });
 });

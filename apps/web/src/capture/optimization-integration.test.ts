@@ -62,7 +62,7 @@ describe("optimization integration", () => {
     bridge.notifyKeyframeInserted();
     await vi.advanceTimersByTimeAsync(0);
     const intervening = { ...initial, createdAtMs: 2, map: { ...initial.map, version: 1 }, poses: { ...initial.poses, version: 1 } };
-    expect(store.commit({ expectedMapVersion: 0, expectedPoseVersion: 0, snapshot: intervening })).toBe(true);
+    expect(controller.synchronize(intervening)).toBe(true);
     worker.finish();
     await Promise.resolve();
     await Promise.resolve();

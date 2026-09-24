@@ -7,6 +7,12 @@ export class ReconstructionStateStore {
   private snapshotValue: ReconstructionSessionSnapshot;
   constructor(initial: ReconstructionSessionSnapshot) { if (!validateReconstructionSession(initial)) throw new Error("Invalid initial reconstruction state."); this.snapshotValue = cloneSnapshot(initial); }
   snapshot(): ReconstructionSessionSnapshot { return cloneSnapshot(this.snapshotValue); }
+  replace(snapshot: ReconstructionSessionSnapshot): boolean {
+    if (!validateReconstructionSession(snapshot)) return false;
+    if (snapshot.map.version < this.snapshotValue.map.version || snapshot.poses.version < this.snapshotValue.poses.version) return false;
+    this.snapshotValue = cloneSnapshot(snapshot);
+    return true;
+  }
   commit(change: ReconstructionStateCommit): boolean {
     if (this.snapshotValue.map.version !== change.expectedMapVersion || this.snapshotValue.poses.version !== change.expectedPoseVersion) return false;
     if (!validateReconstructionSession(change.snapshot)) return false;

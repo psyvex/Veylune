@@ -33,4 +33,14 @@ describe("reconstruction state store", () => {
     expect(store.commit({ expectedMapVersion: current.map.version, expectedPoseVersion: current.poses.version, snapshot: invalid })).toBe(false);
     expect(store.snapshot().observations[0]?.id).toBe("obs");
   });
+
+  it("synchronizes newer live capture snapshots and rejects version regression", () => {
+    const store = new ReconstructionStateStore(session());
+    const current = store.snapshot();
+    const newer = { ...current, map: { ...current.map, version: current.map.version + 1 }, poses: { ...current.poses, version: current.poses.version + 1 }, createdAtMs: 2 };
+    expect(store.replace(newer)).toBe(true);
+    expect(store.snapshot().createdAtMs).toBe(2);
+    expect(store.replace(current)).toBe(false);
+    expect(store.snapshot().createdAtMs).toBe(2);
+  });
 });

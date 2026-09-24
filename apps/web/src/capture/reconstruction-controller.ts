@@ -11,6 +11,7 @@ export class ReconstructionController {
   private stateValue: ReconstructionControllerState = "idle"; private activeId: string | undefined; private unsubscribe: (() => void) | undefined;
   constructor(private readonly store: ReconstructionStateStore, private readonly transport: JobTransport<ReconstructionWorkerInput, ReconstructionWorkerOutput>, private readonly options: ReconstructionControllerOptions = {}) {}
   get state(): ReconstructionControllerState { return this.stateValue; }
+  synchronize(snapshot: ReconstructionSessionSnapshot): boolean { return this.store.replace(snapshot); }
   async optimize(maxIterations = 5, onProgress?: (progress: ReconstructionControllerProgress) => void): Promise<ReconstructionControllerResult> {
     if (this.activeId) throw new Error("A reconstruction job is already running.");
     const snapshot = this.store.snapshot(); const expectedMapVersion = snapshot.map.version; const expectedPoseVersion = snapshot.poses.version; const jobId = `${expectedMapVersion}:${expectedPoseVersion}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`; this.activeId = jobId; this.stateValue = "running";
