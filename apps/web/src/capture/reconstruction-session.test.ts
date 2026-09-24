@@ -29,4 +29,13 @@ describe("reconstruction session", () => {
     graph.add({ id: "unknown", frameIndex: 0, timestampMs: 1, pose: identityCameraPose(), fixed: true });
     expect(() => createReconstructionSession(map, graph.snapshot(), [], undefined, 10)).toThrow();
   });
+
+  it("accepts positive observation precision and rejects invalid weights", () => {
+    const graph = new PoseGraph();
+    graph.add({ id: "kf-1", frameIndex: 0, timestampMs: 1, pose: identityCameraPose(), fixed: true });
+    const session = createReconstructionSession(map, graph.snapshot(), [{ id: "obs-1", keyframeId: "kf-1", landmarkId: "lm-1", x: 10, y: 20, weight: 0.25 }], undefined, 10);
+    expect(validateReconstructionSession(session)).toBe(true);
+    expect(validateReconstructionSession({ ...session, observations: [{ ...session.observations[0]!, weight: 0 }] })).toBe(false);
+    expect(validateReconstructionSession({ ...session, observations: [{ ...session.observations[0]!, weight: Number.NaN }] })).toBe(false);
+  });
 });

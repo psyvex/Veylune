@@ -12,6 +12,7 @@ This stage moves Veylune from isolated numerical primitives toward a complete lo
 - Landmark back-substitution.
 - Damped iterative optimization with bounded camera/landmark steps.
 - Huber robust cost evaluation.
+- Per-observation scalar precision weighting with positive-weight validation.
 - Cost-increase rejection and adaptive damping.
 - LM gain-ratio step acceptance using undamped, robust-weighted normal blocks.
 - Synthetic numerical regression tests for solver primitives and analytic derivatives checked against centered finite differences.
@@ -25,7 +26,7 @@ The optimizer works on a cloned local problem. The caller receives a new candida
 This is a strong browser-oriented numerical foundation, but it is not yet the final high-performance BA implementation. The remaining production work includes:
 
 1. add calibrated distortion parameters to the residual parameterization when calibration is optimized
-2. add stronger robust outlier gating and observation-level covariance handling
+2. add anisotropic observation covariance and stronger outlier gating
 3. add rank-deficiency and gauge diagnostics
 4. move large linear algebra to WebAssembly/WebGPU or a dedicated worker where profiling demonstrates benefit
 5. add recorded-scene regression datasets and device benchmarks

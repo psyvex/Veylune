@@ -5,6 +5,7 @@ import { HuberLoss } from "./robust-loss";
 export function assembleBundleBlocks(
   linearization: BundleLinearization,
   damping = 0,
+  huberDelta = 2,
 ): SchurBlocks {
   const cameraSize = linearization.cameraIds.length * 6;
   const landmarkSize = linearization.landmarkIds.length * 3;
@@ -15,7 +16,7 @@ export function assembleBundleBlocks(
   const landmarkGradient = new Float64Array(landmarkSize);
   const cameraIndex = new Map(linearization.cameraIds.map((id, index) => [id, index]));
   const landmarkIndex = new Map(linearization.landmarkIds.map((id, index) => [id, index]));
-  const robustLoss = new HuberLoss(2);
+  const robustLoss = new HuberLoss(huberDelta);
 
   for (const observation of linearization.observations) {
     if (!observation.valid) continue;
@@ -25,7 +26,8 @@ export function assembleBundleBlocks(
     const cOffset = ci * 6;
     const lOffset = li * 3;
 
-    const weight = robustLoss.weight(observation.residual[0] ** 2 + observation.residual[1] ** 2);
+    const mahalanobisSquared = observation.weight * (observation.residual[0] ** 2 + observation.residual[1] ** 2);
+    const weight = observation.weight * robustLoss.weight(mahalanobisSquared);
     for (let residual = 0; residual < 2; residual += 1) {
       const r = observation.residual[residual]!;
       for (let a = 0; a < 6; a += 1) {

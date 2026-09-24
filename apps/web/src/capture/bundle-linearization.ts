@@ -6,6 +6,7 @@ export interface ObservationLinearization {
   readonly cameraId: string;
   readonly landmarkId: string;
   readonly residual: readonly [number, number];
+  readonly weight: number;
   readonly cameraJacobian: Float64Array; // column-major 2 x 6
   readonly landmarkJacobian: Float64Array; // column-major 2 x 3
   readonly valid: boolean;
@@ -28,12 +29,12 @@ export function linearizeBundle(problem: BundleProblem): BundleLinearization {
     const camera = cameraMap.get(observation.cameraId);
     const landmark = landmarkMap.get(observation.landmarkId);
     if (!camera || !landmark) continue;
-    observations.push(linearizeObservation(camera, landmark, observation.observedX, observation.observedY));
+    observations.push(linearizeObservation(camera, landmark, observation.observedX, observation.observedY, observation.weight ?? 1));
   }
   return { observations, cameraIds, landmarkIds };
 }
 
-function linearizeObservation(camera: CameraBlock, landmark: Landmark, observedX: number, observedY: number): ObservationLinearization {
+function linearizeObservation(camera: CameraBlock, landmark: Landmark, observedX: number, observedY: number, weight: number): ObservationLinearization {
   const r = camera.pose.rotation;
   const t = camera.pose.translation;
   const x = r[0]! * landmark.x + r[1]! * landmark.y + r[2]! * landmark.z + t[0]!;
@@ -42,7 +43,7 @@ function linearizeObservation(camera: CameraBlock, landmark: Landmark, observedX
   const projected = projectDistortedPointWithJacobian([x, y, z], camera.intrinsics, camera.distortion);
   const cameraJacobian = new Float64Array(12);
   const landmarkJacobian = new Float64Array(6);
-  if (!projected) return { cameraId: camera.id, landmarkId: landmark.id, residual: [0, 0], cameraJacobian, landmarkJacobian, valid: false };
+  if (!projected) return { cameraId: camera.id, landmarkId: landmark.id, residual: [0, 0], weight, cameraJacobian, landmarkJacobian, valid: false };
 
   const j = projected.jacobian;
   // A left rotation increment changes the camera point by omega x q = -[q]x omega.
@@ -62,6 +63,6 @@ function linearizeObservation(camera: CameraBlock, landmark: Landmark, observedX
     }
   }
   const residual: readonly [number, number] = [projected.pixel[0] - observedX, projected.pixel[1] - observedY];
-  const valid = [...residual, ...cameraJacobian, ...landmarkJacobian].every(Number.isFinite);
-  return { cameraId: camera.id, landmarkId: landmark.id, residual, cameraJacobian, landmarkJacobian, valid };
+  const valid = Number.isFinite(weight) && weight > 0 && [...residual, ...cameraJacobian, ...landmarkJacobian].every(Number.isFinite);
+  return { cameraId: camera.id, landmarkId: landmark.id, residual, weight, cameraJacobian, landmarkJacobian, valid };
 }

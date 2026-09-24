@@ -14,11 +14,11 @@ export function prepareReconstructionBundle(session: ReconstructionSessionSnapsh
   const observations: BundleAdjustmentObservation[] = [];
   for (const observation of session.observations) {
     if (!landmarkIds.has(observation.landmarkId) || !cameraIds.has(observation.keyframeId)) continue;
-    observations.push({ landmarkId: observation.landmarkId, cameraId: observation.keyframeId, observedX: observation.x, observedY: observation.y });
+    observations.push({ landmarkId: observation.landmarkId, cameraId: observation.keyframeId, observedX: observation.x, observedY: observation.y, ...(observation.weight === undefined ? {} : { weight: observation.weight }) });
   }
   return { landmarks, observations, sessionVersion: session.map.version + session.poses.version, mapVersion: session.map.version, poseVersion: session.poses.version };
 }
 
 export function validateBundleInput(problem: ReconstructionBundleProblem): boolean {
-  return problem.landmarks.length > 0 && problem.observations.every((observation) => Number.isFinite(observation.observedX) && Number.isFinite(observation.observedY));
+  return problem.landmarks.length > 0 && problem.observations.every((observation) => Number.isFinite(observation.observedX) && Number.isFinite(observation.observedY) && (observation.weight === undefined || (Number.isFinite(observation.weight) && observation.weight > 0)));
 }

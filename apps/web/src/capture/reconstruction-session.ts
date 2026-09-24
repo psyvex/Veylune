@@ -4,7 +4,7 @@ import type { RadialTangentialDistortion } from "./distortion";
 import type { LocalMapSnapshot } from "./map";
 import type { PoseGraphSnapshot } from "./keyframe-pose";
 
-export interface ReconstructionObservation { readonly id: string; readonly keyframeId: string; readonly landmarkId: string; readonly x: number; readonly y: number; }
+export interface ReconstructionObservation { readonly id: string; readonly keyframeId: string; readonly landmarkId: string; readonly x: number; readonly y: number; /** Relative precision for this pixel measurement. Defaults to 1. */ readonly weight?: number; }
 export interface ReconstructionCalibration { readonly intrinsics: CameraIntrinsics; readonly distortion: RadialTangentialDistortion; }
 export interface ReconstructionSessionSnapshot { readonly schemaVersion: 3; readonly map: LocalMapSnapshot; readonly poses: PoseGraphSnapshot; readonly observations: readonly ReconstructionObservation[]; readonly calibration: ReconstructionCalibration; readonly createdAtMs: number; }
 
@@ -19,6 +19,7 @@ export function validateReconstructionSession(snapshot: ReconstructionSessionSna
   return snapshot.observations.every((observation) => {
     if (!observation.id || observationIds.has(observation.id) || !keyframes.has(observation.keyframeId) || !landmarks.has(observation.landmarkId)) return false;
     if (!Number.isFinite(observation.x) || !Number.isFinite(observation.y)) return false;
+    if (observation.weight !== undefined && (!Number.isFinite(observation.weight) || observation.weight <= 0)) return false;
     observationIds.add(observation.id);
     return true;
   });

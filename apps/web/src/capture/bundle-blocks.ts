@@ -23,7 +23,7 @@ export function assembleBundleBlocks(linearization: BundleLinearization, loss: R
     const cameraBlock = cameraIndex.get(observation.cameraId);
     const landmarkBlock = landmarkIndex.get(observation.landmarkId);
     if (cameraBlock === undefined || landmarkBlock === undefined) continue;
-    const weight = robustWeight(observation.residual, loss);
+    const weight = robustWeight(observation.residual, observation.weight, loss);
     accumulateObservation(camera, cameraLandmark, landmark, cameraGradient, landmarkGradient, cameraSize, landmarkSize, cameraBlock * 6, landmarkBlock * 3, observation, weight);
   }
 
@@ -38,9 +38,9 @@ export function assembleBundleBlocks(linearization: BundleLinearization, loss: R
   };
 }
 
-function robustWeight(residual: readonly [number, number], loss: RobustLoss): number {
-  const squared = residual[0] * residual[0] + residual[1] * residual[1];
-  return loss.weight(squared);
+function robustWeight(residual: readonly [number, number], precision: number, loss: RobustLoss): number {
+  const squared = precision * (residual[0] * residual[0] + residual[1] * residual[1]);
+  return precision * loss.weight(squared);
 }
 
 function accumulateObservation(
@@ -59,23 +59,23 @@ function accumulateObservation(
   for (let row = 0; row < 2; row += 1) {
     const residual = observation.residual[row]!;
     for (let i = 0; i < 6; i += 1) {
-      const ji = observation.cameraJacobian[row * 6 + i]!;
+      const ji = observation.cameraJacobian[i * 2 + row]!;
       cameraGradient[cameraOffset + i] += weight * ji * residual;
       for (let j = i; j < 6; j += 1) {
-        const jj = observation.cameraJacobian[row * 6 + j]!;
+        const jj = observation.cameraJacobian[j * 2 + row]!;
         camera[(cameraOffset + i) * cameraSize + cameraOffset + j] += weight * ji * jj;
         if (i !== j) camera[(cameraOffset + j) * cameraSize + cameraOffset + i] += weight * ji * jj;
       }
       for (let j = 0; j < 3; j += 1) {
-        const lj = observation.landmarkJacobian[row * 3 + j]!;
+        const lj = observation.landmarkJacobian[j * 2 + row]!;
         cameraLandmark[(cameraOffset + i) * landmarkSize + landmarkOffset + j] += weight * ji * lj;
       }
     }
     for (let i = 0; i < 3; i += 1) {
-      const li = observation.landmarkJacobian[row * 3 + i]!;
+      const li = observation.landmarkJacobian[i * 2 + row]!;
       landmarkGradient[landmarkOffset + i] += weight * li * residual;
       for (let j = i; j < 3; j += 1) {
-        const lj = observation.landmarkJacobian[row * 3 + j]!;
+        const lj = observation.landmarkJacobian[j * 2 + row]!;
         landmark[(landmarkOffset + i) * landmarkSize + landmarkOffset + j] += weight * li * lj;
         if (i !== j) landmark[(landmarkOffset + j) * landmarkSize + landmarkOffset + i] += weight * li * lj;
       }

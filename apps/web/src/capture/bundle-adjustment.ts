@@ -5,6 +5,8 @@ export interface BundleAdjustmentObservation {
   readonly cameraId: string;
   readonly observedX: number;
   readonly observedY: number;
+  /** Relative precision for this pixel measurement. Defaults to 1. */
+  readonly weight?: number;
 }
 
 export interface BundleAdjustmentProblem {

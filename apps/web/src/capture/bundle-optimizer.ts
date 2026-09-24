@@ -6,12 +6,12 @@ import { solveBundleSchurBlocks } from "./schur-block-solve";
 import { applySE3Increment } from "./se3";
 import { HuberLoss } from "./robust-loss";
 
-export interface BundleOptimizerOptions { readonly maxIterations: number; readonly initialDamping: number; readonly minDamping: number; readonly maxDamping: number; readonly convergenceCost: number; readonly convergenceStep: number; readonly maxTranslationStep: number; readonly maxRotationStep: number; readonly maxLandmarkStep: number; readonly shouldCancel?: () => boolean; readonly onProgress?: (progress: { readonly iteration: number; readonly total: number; readonly cost: number }) => void; }
+export interface BundleOptimizerOptions { readonly maxIterations: number; readonly initialDamping: number; readonly minDamping: number; readonly maxDamping: number; readonly convergenceCost: number; readonly convergenceStep: number; readonly maxTranslationStep: number; readonly maxRotationStep: number; readonly maxLandmarkStep: number; readonly huberDelta: number; readonly shouldCancel?: () => boolean; readonly onProgress?: (progress: { readonly iteration: number; readonly total: number; readonly cost: number }) => void; }
 export interface BundleOptimizationResult { readonly status: "converged" | "rejected" | "insufficient" | "cancelled"; readonly iterations: number; readonly initialCost: number; readonly finalCost: number; readonly problem: BundleProblem; }
-const DEFAULT_OPTIONS: BundleOptimizerOptions = { maxIterations: 8, initialDamping: 1e-3, minDamping: 1e-8, maxDamping: 1e6, convergenceCost: 1e-6, convergenceStep: 1e-5, maxTranslationStep: 0.25, maxRotationStep: 0.15, maxLandmarkStep: 0.25 };
+const DEFAULT_OPTIONS: BundleOptimizerOptions = { maxIterations: 8, initialDamping: 1e-3, minDamping: 1e-8, maxDamping: 1e6, convergenceCost: 1e-6, convergenceStep: 1e-5, maxTranslationStep: 0.25, maxRotationStep: 0.15, maxLandmarkStep: 0.25, huberDelta: 2 };
 export function optimizeBundle(input: BundleProblem, options: Partial<BundleOptimizerOptions> = {}): BundleOptimizationResult {
   const config = { ...DEFAULT_OPTIONS, ...options };
-  let problem = cloneProblem(input); let damping = config.initialDamping; let rejectionScale = 2; let acceptedSteps = 0; let currentCost = bundleCost(problem);
+  let problem = cloneProblem(input); let damping = config.initialDamping; let rejectionScale = 2; let acceptedSteps = 0; let currentCost = bundleCost(problem, config.huberDelta);
   if (!Number.isFinite(currentCost) || input.cameras.filter((camera) => camera.fixed).length === 0) return { status: "insufficient", iterations: 0, initialCost: currentCost, finalCost: currentCost, problem: input };
   const initialCost = currentCost;
   for (let iteration = 0; iteration < config.maxIterations; iteration += 1) {
@@ -19,9 +19,9 @@ export function optimizeBundle(input: BundleProblem, options: Partial<BundleOpti
     config.onProgress?.({ iteration, total: config.maxIterations, cost: currentCost });
     const linearization = linearizeBundle(problem);
     if (linearization.observations.length < 4 || linearization.cameraIds.length === 0) return { status: "insufficient", iterations: iteration, initialCost, finalCost: currentCost, problem: input };
-    const blocks = assembleBundleBlocks(linearization); const solved = solveBundleSchurBlocks(blocks, damping);
+    const blocks = assembleBundleBlocks(linearization, 0, config.huberDelta); const solved = solveBundleSchurBlocks(blocks, damping);
     if (solved.status !== "solved") { damping = Math.min(config.maxDamping, damping * rejectionScale); rejectionScale *= 2; if (damping >= config.maxDamping) return { status: acceptedSteps > 0 ? "converged" : "rejected", iterations: iteration + 1, initialCost, finalCost: currentCost, problem }; continue; }
-    const candidate = applyBundleStep(problem, linearization.cameraIds, linearization.landmarkIds, solved.cameraStep, solved.landmarkStep, config); const candidateCost = bundleCost(candidate);
+    const candidate = applyBundleStep(problem, linearization.cameraIds, linearization.landmarkIds, solved.cameraStep, solved.landmarkStep, config); const candidateCost = bundleCost(candidate, config.huberDelta);
     const predictedReduction = predictReduction(blocks, solved.cameraStep, solved.landmarkStep);
     const actualReduction = currentCost - candidateCost;
     const gainRatio = predictedReduction > 0 ? actualReduction / predictedReduction : Number.NEGATIVE_INFINITY;
@@ -40,7 +40,7 @@ export function optimizeBundle(input: BundleProblem, options: Partial<BundleOpti
   config.onProgress?.({ iteration: config.maxIterations, total: config.maxIterations, cost: currentCost });
   return { status: "converged", iterations: config.maxIterations, initialCost, finalCost: currentCost, problem };
 }
-function bundleCost(problem: BundleProblem): number { const loss = new HuberLoss(2); let cost = 0; for (const residual of computeBundleResiduals(problem)) { if (!residual.valid) return Infinity; cost += loss.rhoSquared(residual.residualX ** 2 + residual.residualY ** 2); } return cost; }
+function bundleCost(problem: BundleProblem, huberDelta: number): number { const loss = new HuberLoss(huberDelta); let cost = 0; const residuals = computeBundleResiduals(problem); for (let index = 0; index < residuals.length; index += 1) { const residual = residuals[index]!; const observation = problem.observations[index]!; const weight = observation.weight ?? 1; if (!residual.valid || !Number.isFinite(weight) || weight <= 0) return Infinity; cost += loss.rhoSquared(weight * (residual.residualX ** 2 + residual.residualY ** 2)); } return cost; }
 function predictReduction(blocks: ReturnType<typeof assembleBundleBlocks>, cameraStep: Float64Array, landmarkStep: Float64Array): number {
   let linear = 0; let quadratic = 0;
   for (let i = 0; i < cameraStep.length; i += 1) {

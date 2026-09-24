@@ -2,6 +2,8 @@
 
 The reconstruction stack now has a bounded nonlinear least-squares boundary with a Huber robust loss.
 
+Bundle observations may carry a positive scalar precision weight. The optimizer applies that precision to the whitened residual cost and combines it with the Huber influence weight in normal-equation assembly. Unspecified weights retain unit precision. Full anisotropic covariance matrices are not represented yet.
+
 ## Safety properties
 
 - finite residual validation
@@ -9,7 +11,7 @@ The reconstruction stack now has a bounded nonlinear least-squares boundary with
 - bounded iterations
 - bounded parameter steps
 - configurable damping term
-- robust residual weighting
+- robust residual weighting with per-observation scalar precision
 - rejection when the candidate increases cost
 - original parameters returned on rejection
 - explicit convergence status
