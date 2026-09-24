@@ -2,7 +2,7 @@
 
 ## 1.1 Product definition
 
-VireForge is a local-first digital-human and 3D creative studio.
+Veylune is a local-first digital-human and 3D creative studio.
 
 The primary workflow is:
 
@@ -122,7 +122,7 @@ Do not present an inferred region as if it were directly reconstructed from evid
 ## 1.5 Long-term capability map
 
 ```text
-                     VireForge
+                     Veylune
                          |
         +----------------+----------------+
         |                |                |
