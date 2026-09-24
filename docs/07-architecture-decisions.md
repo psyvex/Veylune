@@ -66,7 +66,7 @@
 
 ## ADR-009 — Project is a scene document
 
-**Decision:** VireForge projects represent avatars, scenes, animation, camera, lighting, and export settings.
+**Decision:** Veylune projects represent avatars, scenes, animation, camera, lighting, and export settings.
 
 **Reasoning:** The product is a creative studio, not a model generator.
 
