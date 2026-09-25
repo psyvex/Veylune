@@ -43,12 +43,12 @@ let ready: Promise<void> | null = null;
  * {@link loadEngineFromBytes} instead (see `engine/node-loader.ts`).
  */
 export function loadEngine(): Promise<void> {
-  if (!ready) {
-    ready = initWasm({ module_or_path: wasmUrl }).then(() => {
-      loaded = true;
-    });
-  }
-  return ready;
+  if (ready) return ready;
+  const pending = initWasm({ module_or_path: wasmUrl }).then(() => {
+    loaded = true;
+  });
+  ready = pending;
+  return pending;
 }
 
 /**

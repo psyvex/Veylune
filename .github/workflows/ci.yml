@@ -32,11 +32,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24.21.0
           package-manager-cache: false
       - run: npm install --ignore-scripts
+      # apps/web's typecheck/test/build scripts each build crates/wasm-bridge
+      # (see apps/web/scripts/build-wasm.mjs) via wasm-pack, which needs cargo
+      # and the wasm32-unknown-unknown target set up above.
       - run: npm run web:typecheck
       - run: npm run web:test
       - run: npm run web:build
