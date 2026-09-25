@@ -15,6 +15,25 @@ export interface CapabilityProfile {
 
 const supported = (value: boolean): CapabilityState => value ? "supported" : "unsupported";
 
+/**
+ * Reduces a browser `CapabilityProfile` to the plain booleans the Rust engine's
+ * backend-selection rule takes (`enginePreferredBackend` in `src/engine/index.ts`),
+ * so browser capability detection and the native engine always agree on which
+ * backend a given profile selects. An `unknown` state is treated as unsupported:
+ * the engine only ever runs a capability it can positively confirm.
+ */
+export function toEngineCapabilities(profile: CapabilityProfile): {
+  webgpu: boolean;
+  wasmSimd: boolean;
+  wasmThreads: boolean;
+} {
+  return {
+    webgpu: profile.webgpu === "supported",
+    wasmSimd: profile.wasmSimd === "supported",
+    wasmThreads: profile.sharedArrayBuffer === "supported" && profile.crossOriginIsolated === "supported",
+  };
+}
+
 export function detectCapabilities(): CapabilityProfile {
   const global = globalThis as typeof globalThis & {
     WebAssembly?: unknown;

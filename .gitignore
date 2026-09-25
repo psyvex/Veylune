@@ -3,6 +3,9 @@ node_modules/
 .pnpm-store/
 .yarn/
 .npm/
+# This workspace standardizes on pnpm (pnpm-lock.yaml); an npm-generated
+# lockfile from an ad hoc `npm install` should not be committed.
+package-lock.json
 
 # Build output
 .next/
@@ -20,6 +23,7 @@ coverage/
 *.wasm.map
 artifacts/
 .cache/
+apps/web/src/engine/wasm-bridge-gen/
 
 # Environment / secrets
 .env

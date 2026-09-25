@@ -7,10 +7,15 @@
     "node": ">=24.21.0"
   },
   "scripts": {
+    "build:wasm": "node scripts/build-wasm.mjs",
+    "build:wasm:release": "node scripts/build-wasm.mjs --release",
+    "predev": "npm run build:wasm",
     "dev": "vite",
+    "prebuild": "npm run build:wasm:release",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "pretest": "npm run build:wasm",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veylune.dev/schema/model-manifest.json",
+  "title": "Veylune model manifest",
+  "description": "Fields required by docs/21-model-registry-and-provenance.md before a model may be activated in the inference engine registry.",
+  "type": "object",
+  "required": [
+    "modelId",
+    "version",
+    "artifactDigest",
+    "sourceUri",
+    "license",
+    "modelCardUri",
+    "supportedBackends",
+    "inputSchema",
+    "outputSchema",
+    "preprocessingVersion",
+    "postprocessingVersion",
+    "minimumCapabilityTier",
+    "knownLimitations",
+    "evaluationDataset",
+    "approvalStatus"
+  ],
+  "properties": {
+    "modelId": { "type": "string", "description": "Stable, immutable model identity." },
+    "version": { "type": "string", "description": "Semantic or content version." },
+    "artifactDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "sourceUri": { "type": "string", "format": "uri" },
+    "license": { "type": "string" },
+    "modelCardUri": { "type": "string" },
+    "supportedBackends": {
+      "type": "array",
+      "items": { "enum": ["webgpu", "wasm", "wasm-simd", "wasm-threads", "native"] },
+      "minItems": 1
+    },
+    "inputSchema": { "type": "object" },
+    "outputSchema": { "type": "object" },
+    "preprocessingVersion": { "type": "string" },
+    "postprocessingVersion": { "type": "string" },
+    "minimumCapabilityTier": { "enum": ["preview", "balanced", "high", "maximum"] },
+    "knownLimitations": { "type": "array", "items": { "type": "string" } },
+    "evaluationDataset": {
+      "type": "object",
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "approvalStatus": { "enum": ["candidate", "approved", "rejected", "deprecated"] }
+  }
+}

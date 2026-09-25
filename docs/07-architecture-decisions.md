@@ -96,6 +96,40 @@
 
 **Consequence:** Quality tiers and fallback paths are part of normal operation.
 
+## ADR-013 — Reconstruction math is ported into Rust/WASM, not duplicated in TypeScript
+
+**Decision:** The numerical reconstruction pipeline (feature tracking math,
+SE3, triangulation, Jacobians, Schur-complement bundle adjustment, robust
+loss, linear solves) is implemented in `crates/geometry` and
+`crates/reconstruction`, compiled to WASM, and called from TypeScript through
+a typed bridge crate. TypeScript owns orchestration, UI, capture control flow,
+and worker scheduling around that boundary, not the numerical core itself.
+
+**Context:** As of 2026-09-25, this pipeline was prototyped directly in
+TypeScript under `apps/web/src/capture/` (bundle adjustment, Schur solves,
+triangulation, SE3, Jacobians, robust loss, linear solves) ahead of the
+Rust/WASM boundary being built, which put the codebase out of step with
+ADR-002 and ADR-003. See `docs/75-production-task-pipeline.md` for the full
+review and the staged migration plan (Stage 1).
+
+**Reasoning:** ADR-002 already commits core algorithms to Rust for long-term
+quality, memory control, and reuse outside the browser (native tooling,
+benchmarking, future desktop/CLI surfaces). Leaving the numerical core in
+TypeScript permanently would mean maintaining two implementations in
+practice — the existing TS code as the de facto engine, and Rust crates that
+never grow beyond data types — which contradicts the stated architecture and
+makes a later migration strictly more expensive as more capture logic is
+added on top of the TS math.
+
+**Consequence:**
+- New reconstruction math is written in Rust first; TypeScript may prototype
+  an algorithm behind a feature flag but must not become the shipped path.
+- The existing TS numerical modules are migrated per the dependency order in
+  `docs/75-production-task-pipeline.md` (Stage 1), each with a parity test
+  against fixtures before the TS implementation is deleted.
+- `apps/web/src/capture/` retains orchestration, worker/session management,
+  guidance/HUD, and UI-facing state, calling into the WASM bridge for math.
+
 ## Alternatives considered
 
 ### All TypeScript

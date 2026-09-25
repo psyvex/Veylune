@@ -5,6 +5,7 @@ members = [
     "crates/geometry",
     "crates/reconstruction",
     "crates/runtime",
+    "crates/wasm-bridge",
 ]
 
 [workspace.package]
