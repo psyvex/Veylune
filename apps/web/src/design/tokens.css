@@ -90,9 +90,9 @@
   --line: rgb(28 33 27 / 0.12);
   --line-strong: rgb(28 33 27 / 0.22);
   --glass-tint: 250 249 244;
-  --glass-alpha: 0.62;
-  --glass-alpha-strong: 0.82;
-  --glass-blur: 20px;
+  --glass-alpha: 0.8;
+  --glass-alpha-strong: 0.93;
+  --glass-blur: 30px;
   --shadow-color: 28 33 27;
 }
 
@@ -106,8 +106,8 @@
     --line: rgb(255 255 255 / 0.09);
     --line-strong: rgb(255 255 255 / 0.16);
     --glass-tint: 24 27 23;
-    --glass-alpha: 0.55;
-    --glass-alpha-strong: 0.78;
+    --glass-alpha: 0.75;
+    --glass-alpha-strong: 0.9;
     --shadow-color: 0 0 0;
     --accent-ink: #0f1408;
   }
@@ -122,8 +122,8 @@
   --line: rgb(255 255 255 / 0.09);
   --line-strong: rgb(255 255 255 / 0.16);
   --glass-tint: 24 27 23;
-  --glass-alpha: 0.55;
-  --glass-alpha-strong: 0.78;
+  --glass-alpha: 0.75;
+  --glass-alpha-strong: 0.9;
   --shadow-color: 0 0 0;
   --accent-ink: #0f1408;
 }
@@ -135,8 +135,8 @@
   --line: rgb(28 33 27 / 0.12);
   --line-strong: rgb(28 33 27 / 0.22);
   --glass-tint: 250 249 244;
-  --glass-alpha: 0.62;
-  --glass-alpha-strong: 0.82;
+  --glass-alpha: 0.8;
+  --glass-alpha-strong: 0.93;
   --shadow-color: 28 33 27;
   --accent-ink: #141a0c;
 }
