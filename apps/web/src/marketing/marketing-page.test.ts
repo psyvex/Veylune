@@ -31,7 +31,7 @@ describe("Veylune marketing page", () => {
     expect(root.querySelector(".scene-caption")?.textContent).toContain("DRAG TO ORBIT");
     expect(root.querySelector(".marketing-hero")?.querySelector(".hero-intro")).toBeTruthy();
     expect(root.querySelectorAll(".feature-card")).toHaveLength(3);
-    expect(root.querySelectorAll('a[href^="/studio#/"]').length).toBeGreaterThanOrEqual(4);
+    expect(root.querySelectorAll('a[href^="/studio/"]').length).toBeGreaterThanOrEqual(4);
     expect(root.querySelector("#privacy")?.textContent).toContain("stay with you");
   });
 

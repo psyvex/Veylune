@@ -21,8 +21,13 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
   // timers the same way `activeCapture` is stopped.
   let pendingSave: VeyluneLoader | undefined;
   let disposed = false;
+  // Guards against an in-flight route render (e.g. Overview's project listing
+  // fetch) finishing and overwriting the DOM after a newer navigation has
+  // already rendered a different page — real if a link is clicked again before
+  // the previous route settled, not just a test-timing artifact.
+  let routeToken = 0;
   let theme = readTheme();
-  root.innerHTML = `<div class="studio-shell veylune-glass-theme" data-accent="${theme}"><aside class="studio-sidebar"><a class="studio-brand" href="#/overview" aria-label="Veylune Studio home"><span class="brand-glyph">${voxelBloomSvg({ variant: "compact" })}</span><span><b>Veylune</b><small>STUDIO</small></span></a><div class="workspace-switch"><span class="workspace-avatar">P</span><span><b>Personal workspace</b><small>Local library</small></span><span class="switch-chevron">⌄</span></div><nav class="studio-nav" aria-label="Main navigation"><p class="nav-caption">WORKSPACE</p>${NAV.map((item) => `<a href="#/${item.route}" data-nav="${item.route}"><span class="nav-icon" aria-hidden="true">${item.icon}</span>${item.label}<span class="nav-active-mark"></span></a>`).join("")}<p class="nav-caption nav-caption-tools">TOOLS</p><a href="#/import" data-nav="import"><span class="nav-icon" aria-hidden="true">↥</span>Import images<span class="nav-active-mark"></span></a></nav><div class="sidebar-bottom"><div class="local-storage-note"><span class="storage-pulse"></span><span><b>Private by design</b><small>Files stay in this browser</small></span></div><button class="profile-button" type="button"><span class="profile-avatar">P</span><span><b>Personal</b><small>Local account</small></span><span class="switch-chevron">···</span></button></div></aside><div class="studio-main"><header class="studio-topbar"><div class="breadcrumbs"><span>Workspace</span><span class="breadcrumb-slash">/</span><b data-page-title>Overview</b></div><div class="topbar-actions"><span class="local-pill"><span></span>LOCAL PROJECTS</span><button class="icon-button" type="button" data-action="theme" aria-label="Open appearance settings">◐</button><a class="topbar-cta" href="#/import"><span aria-hidden="true">＋</span> New project</a></div></header><main class="studio-content" id="studio-content" tabindex="-1"></main></div></div>`;
+  root.innerHTML = `<div class="studio-shell veylune-glass-theme" data-accent="${theme}"><aside class="studio-sidebar"><a class="studio-brand" href="/studio/overview" aria-label="Veylune Studio home"><span class="brand-glyph">${voxelBloomSvg({ variant: "compact" })}</span><span><b>Veylune</b><small>STUDIO</small></span></a><div class="workspace-switch"><span class="workspace-avatar">P</span><span><b>Personal workspace</b><small>Local library</small></span><span class="switch-chevron">⌄</span></div><nav class="studio-nav" aria-label="Main navigation"><p class="nav-caption">WORKSPACE</p>${NAV.map((item) => `<a href="/studio/${item.route}" data-nav="${item.route}"><span class="nav-icon" aria-hidden="true">${item.icon}</span>${item.label}<span class="nav-active-mark"></span></a>`).join("")}<p class="nav-caption nav-caption-tools">TOOLS</p><a href="/studio/import" data-nav="import"><span class="nav-icon" aria-hidden="true">↥</span>Import images<span class="nav-active-mark"></span></a></nav><div class="sidebar-bottom"><div class="local-storage-note"><span class="storage-pulse"></span><span><b>Private by design</b><small>Files stay in this browser</small></span></div><button class="profile-button" type="button"><span class="profile-avatar">P</span><span><b>Personal</b><small>Local account</small></span><span class="switch-chevron">···</span></button></div></aside><div class="studio-main"><header class="studio-topbar"><div class="breadcrumbs"><span>Workspace</span><span class="breadcrumb-slash">/</span><b data-page-title>Overview</b></div><div class="topbar-actions"><span class="local-pill"><span></span>LOCAL PROJECTS</span><button class="icon-button" type="button" data-action="theme" aria-label="Open appearance settings">◐</button><a class="topbar-cta" href="/studio/import"><span aria-hidden="true">＋</span> New project</a></div></header><main class="studio-content" id="studio-content" tabindex="-1"></main></div></div>`;
   const shell = root.querySelector<HTMLElement>(".studio-shell")!;
   const content = root.querySelector<HTMLElement>("#studio-content")!;
   // Glacier is the one accent that reads as a light theme; the other two stay
@@ -32,35 +37,53 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
   document.documentElement.dataset.theme = theme === "glacier" ? "light" : "dark";
   const pageTitle = root.querySelector<HTMLElement>("[data-page-title]")!;
   const routeHandler = (): void => { void renderRoute(); };
-  root.addEventListener("click", (event) => { const target = event.target; if (target instanceof Element && target.closest('[data-action="theme"]')) location.hash = "#/settings"; });
-  window.addEventListener("hashchange", routeHandler);
+  /** Pushes a real URL (history API, not a "#/..." hash) and renders it, so the
+   * address bar always reads as a normal path — /studio/projects/abc, not
+   * /studio#/project/abc. Browser back/forward still works via `popstate`. */
+  const navigate = (path: string): void => { if (`${location.pathname}${location.search}` === path) return; history.pushState(null, "", path); void renderRoute(); };
+  root.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target.closest('[data-action="theme"]')) { navigate("/studio/settings"); return; }
+    // Same-tab left-click on an internal /studio link: take it over client-side
+    // instead of letting the browser do a full navigation/reload.
+    const link = target.closest("a");
+    if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (link.target && link.target !== "_self") return;
+    const url = new URL(link.href, location.href);
+    if (url.origin !== location.origin || !url.pathname.startsWith("/studio")) return;
+    event.preventDefault();
+    navigate(`${url.pathname}${url.search}`);
+  });
+  window.addEventListener("popstate", routeHandler);
   void renderRoute();
 
   async function renderRoute(): Promise<void> {
     if (disposed) return;
+    const token = ++routeToken;
     activeCapture?.dispose(); activeCapture = undefined;
     pendingSave?.dispose(); pendingSave = undefined;
     for (const url of activeAssetUrls) URL.revokeObjectURL(url);
     activeAssetUrls = [];
-    const { page, projectId } = parseRoute(location.hash);
+    const { page, projectId } = parseRoute(location.pathname);
     root.querySelectorAll<HTMLElement>("[data-nav]").forEach((link) => { const active = link.dataset.nav === page || page === "project" && link.dataset.nav === "projects"; link.classList.toggle("is-active", active); if (active) link.setAttribute("aria-current", "page"); else link.removeAttribute("aria-current"); });
     pageTitle.textContent = page === "project" ? "Project" : page === "import" ? "Import images" : page === "settings" ? "Preferences" : page === "capture" ? "Capture" : page === "projects" ? "Projects" : "Overview";
-    if (page === "overview") await renderOverview();
-    else if (page === "projects") await renderProjects();
+    if (page === "overview") await renderOverview(token);
+    else if (page === "projects") await renderProjects(token);
     else if (page === "import") renderImport();
     else if (page === "settings") renderSettings();
     else if (page === "capture") renderCapture();
-    else await renderProject(projectId);
+    else await renderProject(projectId, token);
   }
 
-  async function renderOverview(): Promise<void> {
-    const projects = await safeListProjects(); if (disposed) return;
-    content.innerHTML = `<section class="welcome-row"><div><p class="overline">YOUR RECONSTRUCTION WORKSPACE</p><h1>Make something <span>real.</span></h1><p class="welcome-copy">Turn photos and camera scans into detailed 3D captures. Everything is processed and stored on this device.</p><div class="hero-actions"><a class="action-primary" href="#/import">＋ &nbsp; Import images</a><a class="action-secondary" href="#/capture">◎ &nbsp; Start a capture</a></div></div><div class="hero-visual" aria-hidden="true"><div class="hero-orbit orbit-one"></div><div class="hero-orbit orbit-two"></div><div class="hero-shape"><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="hero-coordinate coord-one">X <b>+02.481</b></div><div class="hero-coordinate coord-two">Y <b>−11.203</b></div><div class="hero-coordinate coord-three">Z <b>+04.782</b></div><div class="hero-visual-caption">SPATIAL ENGINE <span>READY</span></div></div></section><section class="quick-stats"><div><span class="stat-label">TOTAL PROJECTS</span><b>${projects.length.toString().padStart(2,"0")}</b><small>Saved on this device</small></div><div><span class="stat-label">SOURCE IMAGES</span><b>${projects.reduce((sum, project) => sum + project.assetIds.length, 0).toString().padStart(2,"0")}</b><small>Available to your projects</small></div><div><span class="stat-label">PROCESSING</span><b class="stat-local">LOCAL</b><small>No cloud uploads</small></div></section><section class="section-block"><div class="section-heading"><div><p class="overline">PICK UP WHERE YOU LEFT OFF</p><h2>Recent projects</h2></div><a class="text-link" href="#/projects">View all projects <span>↗</span></a></div>${projects.length ? projectGrid(projects.slice(0,3)) : emptyProjects()}</section><section class="workflow-strip"><div class="workflow-number">01</div><div><p class="overline">NEW TO VEYLUNE?</p><h3>From images to spatial insight</h3><p>Import a set of photos from your computer or capture a subject from multiple angles.</p></div><a href="#/import" class="workflow-link">Explore import workflow <span>→</span></a></section>`;
+  async function renderOverview(token: number): Promise<void> {
+    const projects = await safeListProjects(); if (disposed || token !== routeToken) return;
+    content.innerHTML = `<section class="welcome-row"><div><p class="overline">YOUR RECONSTRUCTION WORKSPACE</p><h1>Make something <span>real.</span></h1><p class="welcome-copy">Turn photos and camera scans into detailed 3D captures. Everything is processed and stored on this device.</p><div class="hero-actions"><a class="action-primary" href="/studio/import">＋ &nbsp; Import images</a><a class="action-secondary" href="/studio/capture">◎ &nbsp; Start a capture</a></div></div><div class="hero-visual" aria-hidden="true"><div class="hero-orbit orbit-one"></div><div class="hero-orbit orbit-two"></div><div class="hero-shape"><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="hero-coordinate coord-one">X <b>+02.481</b></div><div class="hero-coordinate coord-two">Y <b>−11.203</b></div><div class="hero-coordinate coord-three">Z <b>+04.782</b></div><div class="hero-visual-caption">SPATIAL ENGINE <span>READY</span></div></div></section><section class="quick-stats"><div><span class="stat-label">TOTAL PROJECTS</span><b>${projects.length.toString().padStart(2,"0")}</b><small>Saved on this device</small></div><div><span class="stat-label">SOURCE IMAGES</span><b>${projects.reduce((sum, project) => sum + project.assetIds.length, 0).toString().padStart(2,"0")}</b><small>Available to your projects</small></div><div><span class="stat-label">PROCESSING</span><b class="stat-local">LOCAL</b><small>No cloud uploads</small></div></section><section class="section-block"><div class="section-heading"><div><p class="overline">PICK UP WHERE YOU LEFT OFF</p><h2>Recent projects</h2></div><a class="text-link" href="/studio/projects">View all projects <span>↗</span></a></div>${projects.length ? projectGrid(projects.slice(0,3)) : emptyProjects()}</section><section class="workflow-strip"><div class="workflow-number">01</div><div><p class="overline">NEW TO VEYLUNE?</p><h3>From images to spatial insight</h3><p>Import a set of photos from your computer or capture a subject from multiple angles.</p></div><a href="/studio/import" class="workflow-link">Explore import workflow <span>→</span></a></section>`;
   }
 
-  async function renderProjects(): Promise<void> {
-    const projects = await safeListProjects(); if (disposed) return;
-    content.innerHTML = `<section class="page-intro"><div><p class="overline">YOUR LIBRARY</p><h1>Projects</h1><p>All of your source images and captures, stored privately on this device.</p></div><a class="action-primary" href="#/import">＋ &nbsp; New project</a></section>${projects.length ? projectGrid(projects) : emptyProjects()}`;
+  async function renderProjects(token: number): Promise<void> {
+    const projects = await safeListProjects(); if (disposed || token !== routeToken) return;
+    content.innerHTML = `<section class="page-intro"><div><p class="overline">YOUR LIBRARY</p><h1>Projects</h1><p>All of your source images and captures, stored privately on this device.</p></div><a class="action-primary" href="/studio/import">＋ &nbsp; New project</a></section>${projects.length ? projectGrid(projects) : emptyProjects()}`;
   }
 
   function renderImport(): void {
@@ -158,7 +181,7 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
     try {
       const project = await service.importImages(selectedFiles, name);
       done();
-      if (!disposed) location.hash = `#/project/${encodeURIComponent(project.id)}`;
+      if (!disposed) navigate(`/studio/projects/${encodeURIComponent(project.id)}`);
     } catch (cause) {
       done();
       if (disposed) return;
@@ -173,26 +196,26 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
   }
 
   function renderCapture(): void {
-    content.innerHTML = `<section class="capture-route-heading"><div><p class="overline">LIVE RECONSTRUCTION</p><h1>Capture</h1><p>Move slowly around your subject. Refinement runs while you scan.</p></div><a href="#/projects" class="text-link">Back to projects <span>↗</span></a></section><div class="embedded-capture" data-capture-root></div>`;
+    content.innerHTML = `<section class="capture-route-heading"><div><p class="overline">LIVE RECONSTRUCTION</p><h1>Capture</h1><p>Move slowly around your subject. Refinement runs while you scan.</p></div><a href="/studio/projects" class="text-link">Back to projects <span>↗</span></a></section><div class="embedded-capture" data-capture-root></div>`;
     activeCapture = mountCaptureApp(content.querySelector<HTMLElement>("[data-capture-root]")!, capabilities);
   }
 
-  async function renderProject(projectId: string): Promise<void> {
-    const project = await service.loadProject(projectId); if (disposed) return;
-    if (!project) { content.innerHTML = `<div class="empty-state"><div class="empty-symbol">?</div><h1>Project not found</h1><p>This project may have been removed from this browser.</p><a class="action-primary" href="#/projects">Back to projects</a></div>`; return; }
+  async function renderProject(projectId: string, token: number): Promise<void> {
+    const project = await service.loadProject(projectId); if (disposed || token !== routeToken) return;
+    if (!project) { content.innerHTML = `<div class="empty-state"><div class="empty-symbol">?</div><h1>Project not found</h1><p>This project may have been removed from this browser.</p><a class="action-primary" href="/studio/projects">Back to projects</a></div>`; return; }
     activeAssetUrls = project.assets.map((asset) => asset.url);
-    content.innerHTML = `<section class="page-intro project-detail-intro"><div><a class="back-link" href="#/projects">← All projects</a><p class="overline">LOCAL PROJECT · ${new Date(project.createdAt).toLocaleDateString()}</p><h1>${escapeHTML(project.name)}</h1><p>${project.assets.length} source image${project.assets.length === 1 ? "" : "s"} · Stored on this device</p></div><a class="action-primary" href="#/capture">◎ &nbsp; Start a capture</a></section><section class="section-block asset-section"><div class="section-heading"><div><p class="overline">SOURCE MATERIAL</p><h2>Imported images</h2></div><span class="asset-count">${project.assets.length.toString().padStart(2,"0")} FILES</span></div><div class="asset-grid">${project.assets.map((asset) => `<figure class="asset-card"><img src="${asset.url}" alt="${escapeHTML(asset.name)}" loading="lazy"><figcaption><span>${escapeHTML(asset.name.split("/").pop() ?? asset.name)}</span><small>${formatBytes(asset.size)}</small></figcaption></figure>`).join("")}</div></section>`;
+    content.innerHTML = `<section class="page-intro project-detail-intro"><div><a class="back-link" href="/studio/projects">← All projects</a><p class="overline">LOCAL PROJECT · ${new Date(project.createdAt).toLocaleDateString()}</p><h1>${escapeHTML(project.name)}</h1><p>${project.assets.length} source image${project.assets.length === 1 ? "" : "s"} · Stored on this device</p></div><a class="action-primary" href="/studio/capture">◎ &nbsp; Start a capture</a></section><section class="section-block asset-section"><div class="section-heading"><div><p class="overline">SOURCE MATERIAL</p><h2>Imported images</h2></div><span class="asset-count">${project.assets.length.toString().padStart(2,"0")} FILES</span></div><div class="asset-grid">${project.assets.map((asset) => `<figure class="asset-card"><img src="${asset.url}" alt="${escapeHTML(asset.name)}" loading="lazy"><figcaption><span>${escapeHTML(asset.name.split("/").pop() ?? asset.name)}</span><small>${formatBytes(asset.size)}</small></figcaption></figure>`).join("")}</div></section>`;
   }
 
   async function safeListProjects() { try { return await service.listProjects(); } catch { return []; } }
-  function dispose(): void { if (disposed) return; disposed = true; pendingSave?.dispose(); pendingSave = undefined; activeCapture?.dispose(); activeAssetUrls.forEach(URL.revokeObjectURL); window.removeEventListener("hashchange", routeHandler); }
+  function dispose(): void { if (disposed) return; disposed = true; pendingSave?.dispose(); pendingSave = undefined; activeCapture?.dispose(); activeAssetUrls.forEach(URL.revokeObjectURL); window.removeEventListener("popstate", routeHandler); }
   return { dispose };
 }
 
-function parseRoute(hash: string): { page: Page; projectId: string } { const [first, second] = hash.replace(/^#\/?/, "").split("/"); if (first === "projects" && second) return { page: "project", projectId: decodeURIComponent(second) }; if (first === "projects" || first === "import" || first === "capture" || first === "settings") return { page: first, projectId: "" }; return { page: "overview", projectId: "" }; }
+function parseRoute(pathname: string): { page: Page; projectId: string } { const [first, second] = pathname.replace(/^\/studio\/?/, "").split("/"); if (first === "projects" && second) return { page: "project", projectId: decodeURIComponent(second) }; if (first === "projects" || first === "import" || first === "capture" || first === "settings") return { page: first, projectId: "" }; return { page: "overview", projectId: "" }; }
 function readTheme(): Theme { try { const stored = localStorage.getItem("veylune-theme"); return THEMES.some((item) => item.id === stored) ? stored as Theme : "obsidian"; } catch { return "obsidian"; } }
-function projectGrid(projects: readonly { id: string; name: string; createdAt: string; updatedAt: string; assetIds: readonly string[] }[]): string { return `<div class="project-grid">${projects.map((project,index) => `<a class="project-card" href="#/projects/${encodeURIComponent(project.id)}"><div class="project-cover cover-${index % 3}"><div class="cover-orb"></div><span class="cover-label">${project.assetIds.length ? `${project.assetIds.length} SOURCE IMAGES` : "CAMERA CAPTURE"}</span><span class="cover-index">${String(index + 1).padStart(2,"0")}</span></div><div class="project-card-info"><div><h3>${escapeHTML(project.name)}</h3><p>Updated ${escapeHTML(new Date(project.updatedAt).toLocaleDateString())}</p></div><span class="project-arrow">↗</span></div></a>`).join("")}</div>`; }
-function emptyProjects(): string { return `<div class="empty-state"><div class="empty-symbol">＋</div><h2>Your first project starts here</h2><p>Import a photo set from your computer or start a live camera capture.</p><div class="empty-actions"><a href="#/import" class="action-primary">Import images</a><a href="#/capture" class="action-secondary">Start a capture</a></div></div>`; }
+function projectGrid(projects: readonly { id: string; name: string; createdAt: string; updatedAt: string; assetIds: readonly string[] }[]): string { return `<div class="project-grid">${projects.map((project,index) => `<a class="project-card" href="/studio/projects/${encodeURIComponent(project.id)}"><div class="project-cover cover-${index % 3}"><div class="cover-orb"></div><span class="cover-label">${project.assetIds.length ? `${project.assetIds.length} SOURCE IMAGES` : "CAMERA CAPTURE"}</span><span class="cover-index">${String(index + 1).padStart(2,"0")}</span></div><div class="project-card-info"><div><h3>${escapeHTML(project.name)}</h3><p>Updated ${escapeHTML(new Date(project.updatedAt).toLocaleDateString())}</p></div><span class="project-arrow">↗</span></div></a>`).join("")}</div>`; }
+function emptyProjects(): string { return `<div class="empty-state"><div class="empty-symbol">＋</div><h2>Your first project starts here</h2><p>Import a photo set from your computer or start a live camera capture.</p><div class="empty-actions"><a href="/studio/import" class="action-primary">Import images</a><a href="/studio/capture" class="action-secondary">Start a capture</a></div></div>`; }
 function inferName(files: readonly File[]): string { const first = files[0]!; const folder = (first as File & { webkitRelativePath?: string }).webkitRelativePath?.split("/")[0]; return folder || first.name.replace(/\.[^.]+$/, "") || "Imported project"; }
 function escapeHTML(value: string): string { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!); }
 function formatBytes(bytes: number): string { if (bytes < 1024) return `${bytes} B`; if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`; return `${(bytes / (1024 * 1024)).toFixed(1)} MB`; }

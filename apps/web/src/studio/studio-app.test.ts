@@ -23,11 +23,20 @@ let dispose: (() => void) | undefined;
 afterEach(() => {
   dispose?.();
   dispose = undefined;
-  location.hash = "";
+  history.pushState(null, "", "/");
   document.body.innerHTML = "";
   localStorage.clear();
   vi.unstubAllGlobals();
 });
+
+/** Studio routes through the History API (see studio-app.ts's `navigate`), not
+ * "#/..." hashes; pushState alone doesn't fire anything, so this dispatches the
+ * same `popstate` event a real back/forward navigation would, which is what the
+ * app actually listens for. */
+function navigateTo(path: string): void {
+  history.pushState(null, "", path);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
 
 describe("Studio navigation and appearance", () => {
   it("starts on a multipage workspace with image import and capture routes", async () => {
@@ -38,14 +47,14 @@ describe("Studio navigation and appearance", () => {
 
     expect(root.querySelector(".studio-sidebar nav")?.textContent).toContain("Projects");
     expect(root.querySelector(".studio-content h1")?.textContent).toContain("Make something");
-    expect(root.querySelector('a[href="#/import"]')).toBeTruthy();
+    expect(root.querySelector('a[href="/studio/import"]')).toBeTruthy();
 
-    location.hash = "#/import";
+    navigateTo("/studio/import");
     await settle();
     expect(root.querySelector(".studio-content h1")?.textContent).toContain("Bring your images");
     expect(root.querySelector('[data-folder-input]')?.hasAttribute("webkitdirectory")).toBe(true);
 
-    location.hash = "#/settings";
+    navigateTo("/studio/settings");
     await settle();
     expect(root.querySelectorAll("[data-theme-option]")).toHaveLength(3);
   });
@@ -54,7 +63,7 @@ describe("Studio navigation and appearance", () => {
     const root = document.createElement("div");
     document.body.append(root);
     dispose = mountStudioApp(root, capabilities).dispose;
-    location.hash = "#/settings";
+    navigateTo("/studio/settings");
     await settle();
 
     root.querySelector<HTMLButtonElement>('[data-theme-option="glacier"]')?.click();
@@ -79,7 +88,7 @@ describe("Import quality scan", () => {
     const root = document.createElement("div");
     document.body.append(root);
     dispose = mountStudioApp(root, capabilities).dispose;
-    location.hash = "#/import";
+    navigateTo("/studio/import");
     await settle();
 
     const a = new File([new Uint8Array([1, 2, 3])], "a.jpg", { type: "image/jpeg" });
@@ -106,7 +115,7 @@ describe("Import quality scan", () => {
     const root = document.createElement("div");
     document.body.append(root);
     dispose = mountStudioApp(root, capabilities).dispose;
-    location.hash = "#/import";
+    navigateTo("/studio/import");
     await settle();
 
     selectFiles(root, [new File([new Uint8Array([1, 2, 3])], "a.jpg", { type: "image/jpeg" })]);

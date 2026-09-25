@@ -28,7 +28,7 @@ void loadEngine().then(() => {
     "balanced",
   );
 });
-if (window.location.pathname.replace(/\/$/, "") === "/studio") {
+if (/^\/studio(\/|$)/.test(window.location.pathname)) {
   // The app mounts first and the splash covers it, so the sequence hides work
   // that is already happening instead of delaying it. Ordering it this way also
   // means a boot failure is never buried behind an overlay: if the app throws,
