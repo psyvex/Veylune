@@ -1,15 +1,22 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applyDragDelta,
+  formatPoseReadout,
   FULL_TURN,
+  makePointCloud,
+  INITIAL_POSE,
   mountSpatialScene,
+  paintScene,
   PITCH_DRAG_SENSITIVITY,
   projector,
+  type SceneMode,
   YAW_DRAG_SENSITIVITY,
 } from "./spatial-scene";
 
-const INITIAL_YAW = -0.52;
-const INITIAL_PITCH = 0.14;
+// The pose the scene is built to open on, read from the scene rather than repeated
+// here, so a change to it moves these expectations instead of silently passing.
+const INITIAL_YAW = INITIAL_POSE.yaw;
+const INITIAL_PITCH = INITIAL_POSE.pitch;
 const DEG = Math.PI / 180;
 
 let activeDispose: (() => void) | undefined;
@@ -27,13 +34,21 @@ interface MountedScene {
   canvas: HTMLCanvasElement;
   pose: () => { yaw: number; pitch: number };
   captured: number[];
+  /** Frames the scene currently has queued with the (stubbed) animation loop. */
+  pendingFrames: () => number;
+  /** Run the queued frame, if any, and report whether one ran. */
+  runFrame: () => boolean;
+  /** Frames queued but not run — the ones a disposal has to make harmless. */
+  peekFrames: () => FrameRequestCallback[];
   dispose: () => void;
 }
 
 // Mount the real scene against a stubbed canvas and track the latest pose the
-// scene paints. Reduced motion is forced so every commit renders synchronously
-// and onPose reports the exact drag-accumulated yaw/pitch (no smoothing lag).
-function mountScene(): MountedScene {
+// scene paints. Reduced motion is forced by default so every commit renders
+// synchronously and onPose reports the exact drag-accumulated yaw/pitch (no
+// smoothing lag); the loop tests pass `reduced: false` to keep the real one.
+function mountScene(options: { reduced?: boolean } = {}): MountedScene {
+  const reduced = options.reduced ?? true;
   const canvas = document.createElement("canvas");
   canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 600, height: 400, right: 600, bottom: 400, x: 0, y: 0, toJSON: () => ({}) });
   canvas.getContext = (() => stubContext()) as unknown as HTMLCanvasElement["getContext"];
@@ -42,10 +57,21 @@ function mountScene(): MountedScene {
   canvas.releasePointerCapture = (id: number) => { const at = captured.indexOf(id); if (at >= 0) captured.splice(at, 1); };
   canvas.hasPointerCapture = (id: number) => captured.includes(id);
 
-  // jsdom has no matchMedia; force prefers-reduced-motion so commits render
-  // synchronously (no rAF) and onPose reports exact drag-accumulated poses.
+  // jsdom has no matchMedia; this is what picks the branch the scene mounts on.
   const previousMatchMedia = window.matchMedia as typeof window.matchMedia | undefined;
-  window.matchMedia = ((query: string) => ({ matches: true, media: query, onchange: null, addListener: () => undefined, removeListener: () => undefined, addEventListener: () => undefined, removeEventListener: () => undefined, dispatchEvent: () => false })) as unknown as typeof window.matchMedia;
+  window.matchMedia = ((query: string) => ({ matches: reduced, media: query, onchange: null, addListener: () => undefined, removeListener: () => undefined, addEventListener: () => undefined, removeEventListener: () => undefined, dispatchEvent: () => false })) as unknown as typeof window.matchMedia;
+
+  // The animation loop is stubbed too, so a test can count the frames the scene has
+  // in flight instead of waiting on real ones.
+  const queue = new Map<number, FrameRequestCallback>();
+  let frameIds = 0;
+  vi.stubGlobal("requestAnimationFrame", (run: FrameRequestCallback) => {
+    frameIds += 1;
+    queue.set(frameIds, run);
+    return frameIds;
+  });
+  vi.stubGlobal("cancelAnimationFrame", (id: number) => { queue.delete(id); });
+
   let latest = { yaw: INITIAL_YAW, pitch: INITIAL_PITCH };
   const scene = mountSpatialScene(canvas, { onPose: (yaw, pitch) => { latest = { yaw, pitch }; } });
 
@@ -54,7 +80,21 @@ function mountScene(): MountedScene {
     if (previousMatchMedia) window.matchMedia = previousMatchMedia;
   };
   activeDispose = dispose;
-  return { canvas, pose: () => latest, captured, dispose };
+  return {
+    canvas,
+    pose: () => latest,
+    captured,
+    pendingFrames: () => queue.size,
+    runFrame: () => {
+      const [id, run] = queue.entries().next().value ?? [];
+      if (!run) return false;
+      queue.delete(id!);
+      run(0);
+      return true;
+    },
+    peekFrames: () => [...queue.values()],
+    dispose,
+  };
 }
 
 interface PointerProps { pointerId?: number; pointerType?: string; button?: number; buttons?: number; clientX?: number; clientY?: number }
@@ -64,7 +104,13 @@ function fire(canvas: HTMLCanvasElement, type: string, props: PointerProps): voi
   canvas.dispatchEvent(event);
 }
 
-afterEach(() => { activeDispose?.(); activeDispose = undefined; document.body.innerHTML = ""; vi.restoreAllMocks(); });
+afterEach(() => {
+  activeDispose?.();
+  activeDispose = undefined;
+  document.body.innerHTML = "";
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("applyDragDelta (pure orbit math)", () => {
   it("raises elevation when dragged up and lowers it when dragged down", () => {
@@ -242,6 +288,31 @@ describe("grab-and-drag interaction (mountSpatialScene pipeline)", () => {
     expect(pose().pitch).toBeGreaterThan(INITIAL_PITCH);
   });
 
+  it("keeps the first finger's drag when a second finger lands", () => {
+    const { canvas, pose } = mountScene();
+    const start = pose();
+    fire(canvas, "pointerdown", { pointerId: 4, pointerType: "touch", clientX: 300, clientY: 400 });
+    fire(canvas, "pointermove", { pointerId: 4, pointerType: "touch", clientX: 300, clientY: 300 }); // dragged 100px up
+    const afterFirst = pose();
+    expect(afterFirst.pitch).toBeGreaterThan(start.pitch);
+
+    // A grab does not transfer to a second finger, and the model does not jump to it.
+    fire(canvas, "pointerdown", { pointerId: 5, pointerType: "touch", clientX: 500, clientY: 400 });
+    fire(canvas, "pointermove", { pointerId: 5, pointerType: "touch", clientX: 100, clientY: 3800 });
+    expect(pose().yaw).toBeCloseTo(afterFirst.yaw, 6);
+    expect(pose().pitch).toBeCloseTo(afterFirst.pitch, 6);
+
+    // Lifting the second finger must not end the first one's grab either.
+    fire(canvas, "pointerup", { pointerId: 5, pointerType: "touch", clientX: 100, clientY: 3800 });
+    fire(canvas, "pointermove", { pointerId: 4, pointerType: "touch", clientX: 300, clientY: 100 });
+    expect(pose().pitch).toBeGreaterThan(afterFirst.pitch);
+
+    fire(canvas, "pointerup", { pointerId: 4, pointerType: "touch", clientX: 300, clientY: 100 });
+    const released = pose();
+    fire(canvas, "pointermove", { pointerId: 4, pointerType: "touch", clientX: 300, clientY: 4000 });
+    expect(pose()).toEqual(released);
+  });
+
   it("accumulates a full vertical revolution via arrow keys too (keyboard unclamped)", () => {
     const { canvas, pose } = mountScene();
     for (let step = 0; step < 120; step += 1) {
@@ -262,6 +333,58 @@ describe("grab-and-drag interaction (mountSpatialScene pipeline)", () => {
     expect(afterUp).toBeGreaterThan(start.pitch);
     expect(afterDown).toBeLessThan(afterUp);
     expect(pose().yaw).toBeGreaterThan(start.yaw);
+  });
+});
+
+describe("the paint loop", () => {
+  it("keeps one animation chain, however often it is poked", () => {
+    const { canvas, pose, pendingFrames, runFrame, dispose } = mountScene({ reduced: false });
+    // Mount paints once, then the loop carries on from that single frame.
+    expect(pendingFrames()).toBe(1);
+
+    // An arrow key paints directly. Each of those direct calls used to leave its own
+    // pending frame behind, so eight keys meant eight parallel 60fps chains, and a
+    // later dispose would have cancelled exactly one of them.
+    for (let step = 0; step < 8; step += 1) {
+      canvas.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", cancelable: true }));
+      expect(pendingFrames()).toBe(1);
+    }
+
+    // A resize is the same story, and so is a drag (which commits through the same
+    // direct path when it is not easing).
+    window.dispatchEvent(new Event("resize"));
+    expect(pendingFrames()).toBe(1);
+    fire(canvas, "pointerdown", { clientX: 300, clientY: 200 });
+    fire(canvas, "pointermove", { clientX: 380, clientY: 160 });
+    fire(canvas, "pointerup", { clientX: 380, clientY: 160 });
+    expect(pendingFrames()).toBe(1);
+
+    // Running the chain keeps it single, and the scene keeps easing toward wherever
+    // the input left it.
+    const before = pose().yaw;
+    for (let step = 0; step < 120; step += 1) {
+      expect(runFrame()).toBe(true);
+      expect(pendingFrames()).toBe(1);
+    }
+    expect(pose().yaw).toBeGreaterThan(before);
+
+    dispose();
+    // The one id it had is the one id it cancels: nothing is left ticking.
+    expect(pendingFrames()).toBe(0);
+  });
+
+  it("refuses to restart from a frame that was in flight when it was disposed", () => {
+    const { pose, pendingFrames, peekFrames, dispose } = mountScene({ reduced: false });
+    const inFlight = peekFrames();
+    expect(inFlight).toHaveLength(1);
+    const resting = pose();
+
+    dispose();
+    // A frame callback that the browser had already lined up still fires after
+    // disposal; it has to render nothing and, above all, must not re-request itself.
+    inFlight.forEach((run) => run(0));
+    expect(pendingFrames()).toBe(0);
+    expect(pose()).toEqual(resting);
   });
 });
 
@@ -292,5 +415,113 @@ describe("projector revolution seamlessness", () => {
     const gap1 = Math.hypot(at.x - before.x, at.y - before.y);
     const gap2 = Math.hypot(after.x - at.x, after.y - at.y);
     expect(gap2).toBeLessThan(gap1 * 2 + 1e-6); // no sudden jump past the limit
+  });
+});
+
+/**
+ * A context that keeps score. Every pen position, piece of type and stroke is
+ * recorded, which is the only way to ask a canvas "what did you just draw" — and the
+ * layers of this scene are exactly the kind of thing that can quietly stop being
+ * drawn, or be drawn at NaN, without any test noticing from the DOM.
+ */
+interface Recording {
+  ctx: CanvasRenderingContext2D;
+  points: number[];
+  texts: string[];
+  arcs: number;
+  strokes: number;
+}
+function recordContext(): Recording {
+  const record: Recording = { points: [], texts: [], arcs: 0, strokes: 0, ctx: undefined as unknown as CanvasRenderingContext2D };
+  record.ctx = new Proxy({} as Record<string, unknown>, {
+    get: (target, key) => (key in target
+      ? (target as Record<string | symbol, unknown>)[key]
+      : (...args: unknown[]) => {
+        if (key === "moveTo" || key === "lineTo") record.points.push(...(args as number[]));
+        if (key === "arc") { record.points.push(args[0] as number, args[1] as number); record.arcs += 1; }
+        if (key === "fillText") { record.texts.push(String(args[0])); record.points.push(args[1] as number, args[2] as number); }
+        if (key === "stroke") record.strokes += 1;
+      }),
+    set: (target, key, value) => { (target as Record<string | symbol, unknown>)[key] = value; return true; },
+  }) as unknown as CanvasRenderingContext2D;
+  return record;
+}
+
+const STAGES: readonly SceneMode[] = [0, 1, 2];
+
+function paint(mode: SceneMode, time: number, animate: boolean, yaw = INITIAL_YAW): Recording {
+  const record = recordContext();
+  paintScene(record.ctx, 1000, 500, time, mode, yaw, 0.14, makePointCloud(), animate);
+  return record;
+}
+
+describe("what the scene draws", () => {
+  it("rings the subject with eight numbered stations, in every stage", () => {
+    STAGES.forEach((mode) => {
+      const { texts } = paint(mode, 4.2, true);
+      const stations = ["01", "02", "03", "04", "05", "06", "07", "08"].filter((label) => texts.includes(label));
+      expect(stations, `stage ${mode} numbers all eight keyframes`).toHaveLength(8);
+    });
+  });
+
+  it("labels the axes it measures against", () => {
+    const { texts } = paint(0, 1.5, true);
+    expect(["X", "Y", "Z"].every((axis) => texts.includes(axis))).toBe(true);
+  });
+
+  it("never puts a non-finite number on the canvas, at any stage or angle", () => {
+    STAGES.forEach((mode) => {
+      [-0.52, 0.9, 1.9, 3.1, 4.4, 6.0].forEach((yaw) => {
+        [0, 1.7, 9.4].forEach((time) => {
+          const { points } = paint(mode, time, true, yaw);
+          expect(points.length, `stage ${mode} at yaw ${yaw} drew something`).toBeGreaterThan(0);
+          expect(points.every(Number.isFinite), `stage ${mode} at yaw ${yaw} stays finite`).toBe(true);
+        });
+      });
+    });
+  });
+
+  it("finishes the map rather than emptying it when motion is reduced", () => {
+    // The same instant, painted live and painted still. Live and early in the sweep,
+    // the beam has not reached most of the cloud yet; still, the cloud is the finished
+    // map it is scanning into — a paused film, not a blank wall.
+    const live = paint(0, 0.2, true);
+    const still = paint(0, 0.2, false);
+    expect(still.arcs).toBeGreaterThan(live.arcs * 4);
+    // And it is the whole drawing that survives, not just the points.
+    expect(still.strokes).toBeGreaterThan(50);
+    expect(["01", "08"].every((label) => still.texts.includes(label))).toBe(true);
+  });
+
+  it("draws every station exactly once, splitting the rig across the room's depth", () => {
+    // The rig is painted twice a frame — the half behind the subject, then the half in
+    // front. Split wrong and a station either vanishes or is drawn twice.
+    // Sorted, because the two passes contribute them in depth order, not station order.
+    const labels = paint(1, 0.4, true).texts.filter((text) => /^0[1-8]$/.test(text)).sort();
+    expect(labels).toEqual(["01", "02", "03", "04", "05", "06", "07", "08"]);
+  });
+});
+
+describe("the pose readout", () => {
+  it("reads the opening pose as a dial, not as radians", () => {
+    // The pinned figure for the pose the scene opens on — the one number in this file that
+    // is allowed to be a literal, because it is what a reviewer would read on screen. Raise
+    // the camera and this fails on purpose: the hero's own readout is derived, not pinned.
+    expect(formatPoseReadout(INITIAL_POSE.yaw, INITIAL_POSE.pitch)).toBe("YAW 330° · PITCH +011°");
+  });
+
+  it("keeps yaw inside one turn however far the drag wound it", () => {
+    // Drag past a full revolution and the readout reports where on the dial you are,
+    // not how many times you have been round.
+    expect(formatPoseReadout(FULL_TURN * 2 + 90 * DEG, 0)).toBe("YAW 090° · PITCH +000°");
+    expect(formatPoseReadout(-90 * DEG, 0)).toBe("YAW 270° · PITCH +000°");
+    // The far side of a turn, where a naive wrap would print a 360 no dial has.
+    expect(formatPoseReadout(359.9 * DEG, 0)).toBe("YAW 000° · PITCH +000°");
+  });
+
+  it("signs pitch, and never shows a negative zero", () => {
+    expect(formatPoseReadout(0, -0.1)).toBe("YAW 000° · PITCH −006°");
+    expect(formatPoseReadout(0, 0)).toBe("YAW 000° · PITCH +000°");
+    expect(formatPoseReadout(0, -0.001)).toBe("YAW 000° · PITCH +000°");
   });
 });

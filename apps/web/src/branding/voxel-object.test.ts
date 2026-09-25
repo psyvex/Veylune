@@ -80,10 +80,12 @@ function mountObject(options: { reduced?: boolean; label?: string } = {}): Mount
   };
 }
 
-interface PointerProps { pointerId?: number; pointerType?: string; button?: number; buttons?: number; clientX?: number; clientY?: number }
+interface PointerProps { pointerId?: number; pointerType?: string; button?: number; buttons?: number; clientX?: number; clientY?: number; isPrimary?: boolean }
 function fire(element: HTMLElement, type: string, props: PointerProps = {}): void {
   const event = new Event(type, { bubbles: true, cancelable: true }) as Event & PointerProps;
-  Object.assign(event, { pointerId: 1, pointerType: "mouse", button: 0, buttons: 1, clientX: 0, clientY: 0 }, props);
+  // Real pointer events carry isPrimary; the object ignores secondary pointers, so
+  // the fakes must claim to be one unless a test says otherwise.
+  Object.assign(event, { pointerId: 1, pointerType: "mouse", button: 0, buttons: 1, clientX: 0, clientY: 0, isPrimary: true }, props);
   element.dispatchEvent(event);
 }
 
@@ -226,6 +228,46 @@ describe("VoxelObject interaction", () => {
     expect(object.pose().pitch - start.pitch).toBeGreaterThan(0);
   });
 
+  it("keeps the orientation it was released at, with easing running", () => {
+    // The branch users actually get: the pose must converge to where the drag left it
+    // and then hold there, not drift back toward the upright or keep coasting.
+    const { object, runFrames } = mountObject({ reduced: false });
+    const start = object.pose();
+
+    drag(object.element, 320, -210);
+    const released = object.pose();
+    runFrames(400);
+    const settled = object.pose();
+
+    expect(Math.abs(settled.yaw - (start.yaw + 320 * YAW_DRAG_SENSITIVITY))).toBeLessThan(0.001);
+    expect(Math.abs(settled.pitch - (start.pitch + 210 * PITCH_DRAG_SENSITIVITY))).toBeLessThan(0.001);
+
+    runFrames(400);
+    expect(object.pose()).toEqual(settled);
+    expect(object.element.classList.contains("is-orbiting")).toBe(false);
+  });
+
+  it("keeps the first finger's grab when a second finger lands", () => {
+    const { object, captured } = mountObject();
+    const start = object.pose();
+
+    fire(object.element, "pointerdown", { pointerId: 1, pointerType: "touch" });
+    // A second finger touching down must not take the grab away from the first one,
+    // and lifting it must not kill the drag the first finger is still doing.
+    fire(object.element, "pointerdown", { pointerId: 2, pointerType: "touch", isPrimary: false });
+    fire(object.element, "pointermove", { pointerId: 1, pointerType: "touch", clientX: 90, clientY: 0 });
+    fire(object.element, "pointerup", { pointerId: 2, pointerType: "touch", isPrimary: false });
+    fire(object.element, "pointermove", { pointerId: 1, pointerType: "touch", clientX: 200, clientY: 0 });
+
+    expect(object.pose().yaw - start.yaw).toBeCloseTo(200 * YAW_DRAG_SENSITIVITY, 10);
+    expect(captured).toEqual([1]);
+    expect(object.element.classList.contains("is-orbiting")).toBe(true);
+
+    fire(object.element, "pointerup", { pointerId: 1, pointerType: "touch" });
+    expect(captured).toEqual([]);
+    expect(object.element.classList.contains("is-orbiting")).toBe(false);
+  });
+
   it("steers with the keyboard and leaves other keys alone", () => {
     const { object } = mountObject();
     const start = object.pose();
@@ -286,7 +328,10 @@ describe("VoxelObject interaction", () => {
 describe("VoxelObject presentation", () => {
   it("is an image you are told how to hold", () => {
     const { object } = mountObject();
-    expect(object.element.getAttribute("role")).toBe("img");
+    // An image role would let assistive tech prune this focusable element before it
+    // ever reached the keyboard path the label promises.
+    expect(object.element.getAttribute("role")).toBe("group");
+    expect(object.element.getAttribute("aria-roledescription")).toBe("rotatable object");
     expect(object.element.tabIndex).toBe(0);
     const label = object.element.getAttribute("aria-label") ?? "";
     expect(label).toMatch(/press and hold/i);

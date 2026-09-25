@@ -70,19 +70,30 @@ export function mountVeyluneLoader(host: HTMLElement, options: VeyluneLoaderOpti
     element.setAttribute("role", "status");
     element.setAttribute("aria-live", "polite");
   }
+  // Deliberately nameless at creation, see `name` below.
   element.innerHTML = voxelBloomSvg({
     variant,
     state: reducedMotion ? "stable" : "dormant",
     ambient: false,
-    // Without the live region the mark stays decorative: whatever owns the label
-    // (a button's own text, a heading beside it) is already the announcement.
-    ...(announce ? { label } : {}),
   });
   host.append(element);
 
   const mark = element.querySelector<SVGSVGElement>(".veylune-mark");
   const timers: number[] = [];
   let disposed = false;
+  let finishing = false;
+
+  /**
+   * Give the mark its name a beat after the region exists. A live region inserted
+   * already holding its text is routinely not announced — from the AT's point of view
+   * nothing changed — so the name is applied as a change, on the next frame.
+   *
+   * Without a live region the mark stays decorative entirely: whatever owns the label
+   * (a button's own text, a heading beside it) is already the announcement.
+   */
+  const name = (): void => {
+    if (announce && !disposed) mark?.setAttribute("aria-label", label);
+  };
 
   const setState = (state: VoxelState): void => {
     mark?.setAttribute("data-state", state);
@@ -96,6 +107,10 @@ export function mountVeyluneLoader(host: HTMLElement, options: VeyluneLoaderOpti
 
   /** The mark has assembled; let it sit and breathe. */
   const settle = (): void => {
+    // `finish()` can land while the assembly is still running. A settle timer that
+    // fires after that would un-dissolve the mark — stable, ambient drift, still
+    // fading out — so the leaving decision wins.
+    if (finishing) return;
     setState("stable");
     mark?.setAttribute("data-ambient", "true");
   };
@@ -104,11 +119,13 @@ export function mountVeyluneLoader(host: HTMLElement, options: VeyluneLoaderOpti
     // No sequence to play: show the finished mark, which is the whole point of
     // the state, and let `finish()` remove it immediately.
     settle();
+    requestAnimationFrame(name);
   } else {
     // A frame first, so the browser paints the dormant pose and the transition
     // to the structure is a real transition rather than a mid-flight guess.
     requestAnimationFrame(() => {
       if (disposed) return;
+      name();
       setState("bloom");
       later(() => {
         setState("formation");
@@ -136,6 +153,7 @@ export function mountVeyluneLoader(host: HTMLElement, options: VeyluneLoaderOpti
         dispose();
         return;
       }
+      finishing = true;
       setState("dissolve");
       later(dispose, DISSOLVE_MS);
     },

@@ -2,7 +2,7 @@ import type { CapabilityProfile } from "../runtime/capabilities";
 import { mountCaptureApp, type CaptureApp } from "../capture/capture-app";
 import { IndexedDbProjectStore } from "../storage/indexeddb";
 import { isSupportedImage, relativeName, StudioProjectService, type ProjectWithAssets } from "./project-service";
-import { mountVeyluneLoader } from "../branding/veylune-loader";
+import { mountVeyluneLoader, type VeyluneLoader } from "../branding/veylune-loader";
 import { voxelBloomSvg } from "../branding/voxel-bloom";
 
 type Page = "overview" | "projects" | "import" | "capture" | "settings" | "project";
@@ -15,6 +15,9 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
   let selectedFiles: File[] = [];
   let activeCapture: CaptureApp | undefined;
   let activeAssetUrls: string[] = [];
+  // The import button's loader, kept so a route change or an unmount can stop its
+  // timers the same way `activeCapture` is stopped.
+  let pendingSave: VeyluneLoader | undefined;
   let disposed = false;
   let theme = readTheme();
   root.innerHTML = `<div class="studio-shell" data-theme="${theme}"><aside class="studio-sidebar"><a class="studio-brand" href="#/overview" aria-label="Veylune Studio home"><span class="brand-glyph">${voxelBloomSvg({ variant: "compact" })}</span><span><b>Veylune</b><small>STUDIO</small></span></a><div class="workspace-switch"><span class="workspace-avatar">P</span><span><b>Personal workspace</b><small>Local library</small></span><span class="switch-chevron">⌄</span></div><nav class="studio-nav" aria-label="Main navigation"><p class="nav-caption">WORKSPACE</p>${NAV.map((item) => `<a href="#/${item.route}" data-nav="${item.route}"><span class="nav-icon" aria-hidden="true">${item.icon}</span>${item.label}<span class="nav-active-mark"></span></a>`).join("")}<p class="nav-caption nav-caption-tools">TOOLS</p><a href="#/import" data-nav="import"><span class="nav-icon" aria-hidden="true">↥</span>Import images<span class="nav-active-mark"></span></a></nav><div class="sidebar-bottom"><div class="local-storage-note"><span class="storage-pulse"></span><span><b>Private by design</b><small>Files stay in this browser</small></span></div><button class="profile-button" type="button"><span class="profile-avatar">P</span><span><b>Personal</b><small>Local account</small></span><span class="switch-chevron">···</span></button></div></aside><div class="studio-main"><header class="studio-topbar"><div class="breadcrumbs"><span>Workspace</span><span class="breadcrumb-slash">/</span><b data-page-title>Overview</b></div><div class="topbar-actions"><span class="local-pill"><span></span>LOCAL PROJECTS</span><button class="icon-button" type="button" data-action="theme" aria-label="Open appearance settings">◐</button><a class="topbar-cta" href="#/import"><span aria-hidden="true">＋</span> New project</a></div></header><main class="studio-content" id="studio-content" tabindex="-1"></main></div></div>`;
@@ -29,6 +32,7 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
   async function renderRoute(): Promise<void> {
     if (disposed) return;
     activeCapture?.dispose(); activeCapture = undefined;
+    pendingSave?.dispose(); pendingSave = undefined;
     for (const url of activeAssetUrls) URL.revokeObjectURL(url);
     activeAssetUrls = [];
     const { page, projectId } = parseRoute(location.hash);
@@ -98,12 +102,21 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
       className: "button-loader",
       announce: false,
     });
+    pendingSave = loader;
+    // The loader belongs to this import only: a route change may have already
+    // disposed it while the import was running, and an unmount must not leave its
+    // timers writing attributes onto nodes that are gone.
+    const done = (): void => {
+      if (pendingSave === loader) pendingSave = undefined;
+      loader.dispose();
+    };
     try {
       const project = await service.importImages(selectedFiles, name);
-      loader.dispose();
+      done();
       if (!disposed) location.hash = `#/project/${encodeURIComponent(project.id)}`;
     } catch (cause) {
-      loader.dispose();
+      done();
+      if (disposed) return;
       error.textContent = cause instanceof Error ? cause.message : "Images could not be saved. Check your browser storage and try again.";
       button.disabled = false; button.innerHTML = "Try again <span>→</span>";
     }
@@ -127,7 +140,7 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
   }
 
   async function safeListProjects() { try { return await service.listProjects(); } catch { return []; } }
-  function dispose(): void { if (disposed) return; disposed = true; activeCapture?.dispose(); activeAssetUrls.forEach(URL.revokeObjectURL); window.removeEventListener("hashchange", routeHandler); }
+  function dispose(): void { if (disposed) return; disposed = true; pendingSave?.dispose(); pendingSave = undefined; activeCapture?.dispose(); activeAssetUrls.forEach(URL.revokeObjectURL); window.removeEventListener("hashchange", routeHandler); }
   return { dispose };
 }
 

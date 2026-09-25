@@ -54,11 +54,16 @@ export function mountVoxelObject(host: HTMLElement, options: VoxelObjectOptions 
   const element = document.createElement("div");
   element.className = ["voxel-object", options.className].filter(Boolean).join(" ");
   element.tabIndex = 0;
-  element.setAttribute("role", "img");
+  // A control, not a picture. `role="img"` here would make assistive tech prune the
+  // element as a non-interactive image, so the arrow-key path the label advertises
+  // would never be reachable; a group with a role description is announced as the
+  // thing it actually is.
+  element.setAttribute("role", "group");
+  element.setAttribute("aria-roledescription", "rotatable object");
   element.setAttribute(
     "aria-label",
     options.label
-      ?? "Veylune identity object. Press and hold to grab it, then drag to spin it a full 360 degrees in any direction, or use the arrow keys. Release to let go and it stays where you left it.",
+      ?? "Veylune identity. Press and hold to grab it, then drag to spin it a full 360 degrees in any direction, or use the arrow keys. Release to let go and it stays where you left it.",
   );
   element.innerHTML = `<div class="voxel-object-stage">${voxelBloomSvg({
     variant: options.variant ?? "full",
@@ -110,6 +115,10 @@ export function mountVoxelObject(host: HTMLElement, options: VoxelObjectOptions 
 
   const onPointerDown = (event: PointerEvent): void => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    // One grab at a time, and only ever the first finger down. Without this a second
+    // touch overwrites the tracked press, the first finger's release is then ignored
+    // as a mismatch, and the still-held finger's drag dies with the grab flagged live.
+    if (press || event.isPrimary === false) return;
     press = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
     element.setPointerCapture?.(event.pointerId);
     element.classList.add("is-orbiting");

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { formatPoseReadout, INITIAL_POSE } from "./spatial-scene";
 import { mountMarketingPage } from "./marketing-page";
 
 let dispose: (() => void) | undefined;
@@ -8,6 +9,7 @@ afterEach(() => {
   dispose = undefined;
   document.body.innerHTML = "";
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 function mountPage(): HTMLElement {
@@ -31,6 +33,37 @@ describe("Veylune marketing page", () => {
     expect(root.querySelectorAll(".feature-card")).toHaveLength(3);
     expect(root.querySelectorAll('a[href^="/studio#/"]').length).toBeGreaterThanOrEqual(4);
     expect(root.querySelector("#privacy")?.textContent).toContain("stay with you");
+  });
+
+  it("lays the hero out as a column, with the copy under the scene it describes", () => {
+    const root = mountPage();
+    const stage = root.querySelector<HTMLElement>(".hero-stage")!;
+    const copy = root.querySelector<HTMLElement>(".hero-intro")!;
+    // Same section, and the copy after the whole visual block in document order — the
+    // reading order is the layout, not something the stylesheet has to argue for.
+    expect(stage.contains(root.querySelector(".spatial-canvas"))).toBe(true);
+    expect(stage.compareDocumentPosition(copy) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Nothing washes over the scene or floats on it any more.
+    expect(root.querySelector(".scene-vignette")).toBeNull();
+    expect(root.querySelectorAll(".hero-enhancement, .hero-data-card, .scene-callout")).toHaveLength(0);
+  });
+
+  it("keeps the annotation layer decorative, so the canvas is the only thing named", () => {
+    const root = mountPage();
+    const annotations = root.querySelector<HTMLElement>(".hero-annotations")!;
+    expect(root.querySelectorAll(".hero-note").length).toBeGreaterThanOrEqual(4);
+    expect(annotations.getAttribute("aria-hidden")).toBe("true");
+    expect(annotations.contains(root.querySelector(".spatial-canvas"))).toBe(false);
+    // One heading for the hero: the stage label lost its h2 so the page has a single
+    // place to point a reader, and the canvas carries the description.
+    expect(root.querySelectorAll(".marketing-hero h1, .marketing-hero h2")).toHaveLength(1);
+  });
+
+  it("names the keyframe rail it belongs to in the hero detail strip", () => {
+    const root = mountPage();
+    expect(root.querySelector(".hero-detail")?.textContent).toContain("KEYFRAME RAIL");
+    expect(root.querySelector(".hero-detail")?.getAttribute("aria-hidden")).toBe("true");
+    expect(root.querySelectorAll(".frame-rail li")).toHaveLength(8);
   });
 
   it("keeps the compact navigation keyboard accessible", () => {
@@ -95,7 +128,7 @@ describe("Veylune identity on the marketing page", () => {
     expect(root.querySelectorAll(".closing-orb")).toHaveLength(0);
     const object = root.querySelector<HTMLElement>(".closing-object .voxel-object");
     expect(object).toBeTruthy();
-    expect(object!.getAttribute("role")).toBe("img");
+    expect(object!.getAttribute("role")).toBe("group");
     expect(object!.getAttribute("aria-label")).toMatch(/press and hold/i);
     expect(object!.querySelector(".veylune-mark")).toBeTruthy();
     // Nothing follows the cursor: the object only ever turns on a drag.
@@ -108,6 +141,50 @@ describe("Veylune identity on the marketing page", () => {
     dispose?.();
     dispose = undefined;
     expect(root.querySelector(".closing-object .voxel-object")).toBeNull();
+  });
+});
+
+describe("the readout that reports the scene's pose", () => {
+  // A page whose canvas actually paints: getContext hands back something that swallows
+  // drawing, and the animation loop is stubbed so the only frame that ever runs is the
+  // one this test causes. Everything else about the page is real.
+  function mountLivePage(): HTMLElement {
+    vi.stubGlobal("requestAnimationFrame", () => 1);
+    vi.stubGlobal("cancelAnimationFrame", () => undefined);
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(() => new Proxy({}, {
+      get: (target, key) => (key in target ? (target as Record<string | symbol, unknown>)[key] : () => undefined),
+      set: (target, key, value) => { (target as Record<string | symbol, unknown>)[key] = value; return true; },
+    }) as unknown as CanvasRenderingContext2D);
+    const root = document.createElement("div");
+    document.body.append(root);
+    dispose = mountMarketingPage(root).dispose;
+    return root;
+  }
+
+  it("reports the pose the scene opened on, in degrees", () => {
+    const root = mountLivePage();
+    expect(root.querySelector("[data-scene-pose]")?.textContent).toBe(formatPoseReadout(INITIAL_POSE.yaw, INITIAL_POSE.pitch));
+  });
+
+  it("follows the scene instead of showing a pose of its own", () => {
+    const root = mountLivePage();
+    const readout = root.querySelector("[data-scene-pose]")!;
+    const opened = readout.textContent;
+
+    root.querySelector<HTMLCanvasElement>(".spatial-canvas")!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", cancelable: true }));
+
+    // One arrow step is 0.12 rad of *intended* rotation, and a single frame of easing
+    // (16%) has been applied to it. Anything else in this string is a number the page
+    // made up rather than the one the scene is at.
+    expect(readout.textContent).toBe(formatPoseReadout(INITIAL_POSE.yaw + 0.12 * 0.16, INITIAL_POSE.pitch));
+    expect(readout.textContent).not.toBe(opened);
+  });
+
+  it("still reads out a pose when the canvas cannot paint at all", () => {
+    // No 2d context means no frames, and a readout that only ever updates on a frame
+    // would be blank; it reports the pose the scene would have opened on.
+    const root = mountPage();
+    expect(root.querySelector("[data-scene-pose]")?.textContent).toBe(formatPoseReadout(INITIAL_POSE.yaw, INITIAL_POSE.pitch));
   });
 });
 

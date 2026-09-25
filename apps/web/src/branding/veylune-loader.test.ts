@@ -138,6 +138,49 @@ describe("VeyluneLoader", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it("never un-dissolves when finish lands mid-assembly", () => {
+    mount();
+    vi.advanceTimersByTime(40); // formation is running, settle is still queued
+    loader!.finish();
+    expect(state()).toBe("dissolve");
+
+    // Walk past the settle timer's slot: it must not fire the mark back to stable and
+    // re-ignite the ambient drift under a mark that is already leaving.
+    vi.advanceTimersByTime(1_560);
+    expect(state()).toBe("dissolve");
+    expect(ambient()).toBe("false");
+    vi.advanceTimersByTime(1_000);
+    expect(loader!.element.isConnected).toBe(false);
+  });
+
+  it("names its live region as a change, after the region exists", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: false, media: query, onchange: null,
+      addListener: () => undefined, removeListener: () => undefined,
+      addEventListener: () => undefined, removeEventListener: () => undefined,
+      dispatchEvent: () => false,
+    }));
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (run: FrameRequestCallback) => {
+      frames.push(run);
+      return frames.length;
+    });
+
+    const host = document.createElement("div");
+    document.body.append(host);
+    loader = mountVeyluneLoader(host, { label: "Rebuilding the map" });
+
+    // A live region that arrives already holding its text is often not announced at
+    // all, so the name is applied only once the region is in the document.
+    const mark = loader.element.querySelector<SVGSVGElement>(".veylune-mark")!;
+    expect(mark.hasAttribute("aria-label")).toBe(false);
+    expect(loader.element.getAttribute("role")).toBe("status");
+
+    frames.forEach((run) => run(0));
+    expect(mark.getAttribute("aria-label")).toBe("Rebuilding the map");
+  });
+
   it("lets a surface drive the states itself", () => {
     mount();
     vi.advanceTimersByTime(1_700);

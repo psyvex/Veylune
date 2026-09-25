@@ -1,0 +1,38 @@
+[  655798ms] ReferenceError: renderFooter is not defined
+    at mountMarketingPage (http://localhost:5173/src/marketing/marketing-page.ts?t=1790318445708:184:9)
+    at http://localhost:5173/src/main.ts?t=1790318445708:23:2
+[ 2971412ms] ReferenceError: hoverIndex is not defined
+    at render (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320761452:107:165)
+    at resize (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320761452:92:3)
+    at mountSpatialScene (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320761452:194:2)
+    at mountMarketingPage (http://localhost:5173/src/marketing/marketing-page.ts?t=1790320761452:263:16)
+    at http://localhost:5173/src/main.ts?t=1790320761452:23:2
+[ 2971412ms] ReferenceError: hoverIndex is not defined
+    at render (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320761452:107:165)
+    at ResizeObserver.resize (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320761452:92:3)
+[ 2971451ms] ReferenceError: hoverIndex is not defined
+    at render (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320761452:107:165)
+[ 3131604ms] ReferenceError: tint is not defined
+    at windowLight (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320921550:333:11)
+    at drawRoomShell (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320921550:369:5)
+    at paintScene (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320921550:263:2)
+    at render (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320921550:107:3)
+    at resize (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320921550:92:3)
+    at mountSpatialScene (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320921550:223:2)
+    at mountMarketingPage (http://localhost:5173/src/marketing/marketing-page.ts?t=1790320921550:263:16)
+    at http://localhost:5173/src/main.ts?t=1790320921550:23:2
+[ 3131605ms] ReferenceError: tint is not defined
+    at windowLight (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320921550:333:11)
+    at drawRoomShell (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320921550:369:5)
+    at paintScene (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320921550:263:2)
+    at render (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320921550:107:3)
+    at ResizeObserver.resize (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320921550:92:3)
+[ 3131608ms] ReferenceError: tint is not defined
+    at windowLight (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320921550:333:11)
+    at drawRoomShell (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320921550:369:5)
+    at paintScene (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320921550:263:2)
+    at render (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320921550:107:3)
+[ 3150286ms] ReferenceError: size is not defined
+    at drawPointCloud (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320939274:1121:31)
+    at paintScene (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320939274:271:2)
+    at render (http://localhost:5173/src/marketing/spatial-scene.ts?t=1790320939274:107:3)

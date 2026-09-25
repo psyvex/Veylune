@@ -40,13 +40,21 @@ export function mountVeyluneSplash(host: HTMLElement, options: { label?: string 
     variant: "full",
     state: reducedMotion ? "stable" : "dormant",
     ambient: false,
-    label: options.label ?? "Loading Veylune",
   })}<span class="veylune-splash-word" aria-hidden="true">VEYLUNE</span>`;
   host.append(element);
 
   const mark = element.querySelector<SVGSVGElement>(".veylune-mark");
   const timers: number[] = [];
   let disposed = false;
+
+  /**
+   * Named a frame after the region is in the DOM, not at creation: a live region that
+   * arrives already holding its text is routinely skipped, so the label is applied as
+   * a change instead of as part of the markup.
+   */
+  const name = (): void => {
+    if (!disposed) mark?.setAttribute("aria-label", options.label ?? "Loading Veylune");
+  };
 
   const later = (run: () => void, ms: number): void => {
     timers.push(window.setTimeout(() => {
@@ -79,10 +87,12 @@ export function mountVeyluneSplash(host: HTMLElement, options: { label?: string 
     // No sequence to play. Show the finished mark for a moment so the boot is
     // not a flash, then hand over — no travel, no fade, nothing to trigger.
     element.classList.add("is-formed");
+    requestAnimationFrame(name);
     later(dispose, 400);
   } else {
     requestAnimationFrame(() => {
       if (disposed) return;
+      name();
       mark?.setAttribute("data-state", "bloom");
       later(() => {
         mark?.setAttribute("data-state", "formation");

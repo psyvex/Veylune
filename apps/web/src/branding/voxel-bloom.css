@@ -57,7 +57,10 @@
 .vb-cell[data-depth="0"] { --vb-tone: 0.5; }
 .vb-cell[data-depth="1"] { --vb-tone: 0.78; }
 .vb-cell[data-depth="2"] { --vb-tone: 1; }
-.vb-cell[data-tier="secondary"] { --vb-tone: 0.42; }
+/* Secondary mirrors SECONDARY_TONE in voxel-bloom.ts, which is what bakes the
+   icons: full 0.36, compact 0.42, micro 0.7. Those two files are kept in step by
+   the parity test in voxel-bloom.test.ts. */
+.vb-cell[data-tier="secondary"] { --vb-tone: 0.36; }
 
 /* Favicon sizes flatten the tone: at 16px a gradient reads as dirt, not depth. */
 .veylune-mark[data-variant="micro"] .vb-cell[data-depth="0"] { --vb-tone: 0.86; }
@@ -65,6 +68,7 @@
 .veylune-mark[data-variant="micro"] .vb-cell[data-tier="secondary"] { --vb-tone: 0.7; }
 .veylune-mark[data-variant="compact"] .vb-cell[data-depth="0"] { --vb-tone: 0.56; }
 .veylune-mark[data-variant="compact"] .vb-cell[data-depth="1"] { --vb-tone: 0.8; }
+.veylune-mark[data-variant="compact"] .vb-cell[data-tier="secondary"] { --vb-tone: 0.42; }
 
 /*
  * A: dormant — scattered outward and unseen, the state before anything arrives.
@@ -174,7 +178,12 @@
   place-items: center;
   perspective: 900px;
   cursor: grab;
-  touch-action: pan-y;
+  /* The object has to own both axes of the gesture or the vertical half of it does
+     not exist: `pan-y` hands vertical swipes to the scroller, the browser fires
+     pointercancel, and the grab dies before pitch accumulates. That is fine for the
+     hero canvas, which is full-bleed and must leave the page scrollable — see
+     `.spatial-canvas` — and wrong for a 130px object whose whole job is to be turned. */
+  touch-action: none;
   -webkit-user-select: none;
   user-select: none;
 }

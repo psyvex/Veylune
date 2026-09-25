@@ -97,18 +97,28 @@ describe("Veylune splash", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("takes Escape as a skip, and stops listening once it is gone", () => {
+  it("takes Escape as a skip", () => {
     const element = mount().element;
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     // The listener is on the window, so a document-level event must reach it.
-    expect(element.isConnected).toBe(false);
-
-    const again = mount().element;
-    again.click();
-    expect(again.isConnected).toBe(false);
-    // A disposed splash must not keep a window listener that disposes nothing.
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(element.isConnected).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("gives its listeners back when it is disposed", () => {
+    // A splash that kept its global keydown listener would let a later Escape tear
+    // down the next overlay, and a detached node with a click listener attached keeps
+    // its whole closure alive for nothing.
+    const removed: string[] = [];
+    const removeSpy = vi.spyOn(window, "removeEventListener").mockImplementation((type) => {
+      removed.push(type);
+    });
+    const element = mount().element;
+    splash?.dispose();
+
+    expect(removed).toContain("keydown");
+    expect(element.isConnected).toBe(false);
+    removeSpy.mockRestore();
   });
 
   it("shows the finished mark instead of a sequence under reduced motion", () => {

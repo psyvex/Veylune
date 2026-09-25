@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   cellTone,
@@ -6,6 +7,7 @@ import {
   voxelBloomIconSvg,
   voxelBloomSvg,
   voxelCells,
+  type VoxelCell,
   type VoxelVariant,
 } from "./voxel-bloom";
 
@@ -182,5 +184,61 @@ describe("Voxel Bloom markup", () => {
     expect(markup).not.toContain("currentColor");
     // A transparent icon simply leaves the tile out.
     expect(voxelBloomIconSvg({ variant: "micro" })).not.toContain('x="0" y="0" width="64" height="64"');
+  });
+});
+
+describe("Tone parity between the stylesheet and the geometry", () => {
+  // Two renderers of one mark: the page paints it with currentColor and reads its ink
+  // from voxel-bloom.css, while the icons and the standalone favicon are baked with the
+  // numbers in voxel-bloom.ts. Nothing links the two, so a change to one silently
+  // makes favicons a different mark from the logo on the same page.
+  // The base sits in a variable on purpose: written directly, `new URL("./x.css",
+  // import.meta.url)` is rewritten by Vite into a dev-server asset URL, which fs
+  // refuses to open. Left to Node, it resolves to the file next to this test.
+  const here = import.meta.url;
+  const css = readFileSync(new URL("./voxel-bloom.css", here), "utf8");
+
+  /** Every `--vb-tone` rule in source order, which is also the cascade order here. */
+  const toneRules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .map(([, selector, body]) => ({ selector: selector?.trim() ?? "", tone: /--vb-tone:\s*[\d.]+/.exec(body ?? "")?.[0] }))
+    .filter((rule): rule is { selector: string; tone: string } => rule.tone !== undefined)
+    .map((rule) => ({ selector: rule.selector, tone: Number(rule.tone.slice(rule.tone.indexOf(":") + 1)) }));
+
+  /** The tone the stylesheet lands on for one cell of one variant. */
+  function cssTone(variant: VoxelVariant, cell: Pick<VoxelCell, "depth" | "tier">): number {
+    let tone = Number.NaN;
+    for (const rule of toneRules) {
+      const scoped = /data-variant="(\w+)"/.exec(rule.selector);
+      if (scoped && scoped[1] !== variant) continue;
+      const depth = /data-depth="(\d)"/.exec(rule.selector);
+      if (depth && Number(depth[1]) !== cell.depth) continue;
+      const tier = /data-tier="(\w+)"/.exec(rule.selector);
+      if (tier && tier[1] !== cell.tier) continue;
+      tone = rule.tone; // later rules win, as they do in the cascade
+    }
+    return tone;
+  }
+
+  it("finds the rules it is about to compare", () => {
+    // A parse that matched nothing would make every comparison below vacuously true.
+    expect(toneRules.length).toBeGreaterThanOrEqual(9);
+  });
+
+  it("gives every cell the same ink in CSS as in the baked geometry", () => {
+    for (const variant of VARIANTS) {
+      for (const cell of voxelCells(variant)) {
+        const label = `${variant} ${cell.id} (${cell.tier}, depth ${cell.depth})`;
+        expect(cssTone(variant, cell), `${label} renders at the stylesheet's ink`).toBe(cellTone(cell, variant));
+      }
+    }
+  });
+
+  it("uses that same ink when it bakes an icon", () => {
+    for (const variant of VARIANTS) {
+      const markup = voxelBloomIconSvg({ variant });
+      for (const cell of voxelCells(variant)) {
+        expect(markup).toContain(`fill-opacity="${cellTone(cell, variant)}"`);
+      }
+    }
   });
 });

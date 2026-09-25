@@ -6,6 +6,10 @@
     <meta name="description" content="A private spatial studio for capturing spaces, refining local maps, and organizing image sets." />
     <meta name="color-scheme" content="dark light" />
     <meta name="theme-color" content="#111310" />
+    <!-- PLACEHOLDER DOMAIN: no canonical host was found in this repo (no homepage field,
+         no README mention). Replace https://veylune.app below with the real production
+         domain before this ships — canonical/OG/Twitter/JSON-LD all depend on it. -->
+    <link rel="canonical" href="https://veylune.app/" />
     <!--
       One identity, from the lattice in src/branding/voxel-bloom.ts. The PNG tiles
       are rasterised from that same lattice by scripts/render-brand.mjs rather than
@@ -18,6 +22,34 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <title>Veylune — Spatial capture, made tangible</title>
+
+    <!-- Open Graph / Twitter card: what a shared link shows on Slack, iMessage, X, etc.
+         Reuses the same description as the <meta name="description"> above rather than
+         writing the pitch twice. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Veylune" />
+    <meta property="og:title" content="Veylune — Spatial capture, made tangible" />
+    <meta property="og:description" content="A private spatial studio for capturing spaces, refining local maps, and organizing image sets." />
+    <meta property="og:url" content="https://veylune.app/" />
+    <meta property="og:image" content="https://veylune.app/icon-512.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Veylune — Spatial capture, made tangible" />
+    <meta name="twitter:description" content="A private spatial studio for capturing spaces, refining local maps, and organizing image sets." />
+    <meta name="twitter:image" content="https://veylune.app/icon-512.png" />
+
+    <!-- Structured data: tells a crawler this is an Organization/WebSite named Veylune,
+         independent of whatever it manages to render from the client-only JS below (this
+         app has no server-side rendering — see the SEO note in the marketing-page plan). -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Veylune",
+        "url": "https://veylune.app/",
+        "logo": "https://veylune.app/icon-512.png",
+        "description": "A private spatial studio for capturing spaces, refining local maps, and organizing image sets."
+      }
+    </script>
   </head>
   <body>
     <div id="app"></div>

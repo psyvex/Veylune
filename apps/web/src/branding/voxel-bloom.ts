@@ -157,10 +157,10 @@ const MARK_INSET = 0.11;
  * draws. Centring per variant is what keeps a 16px favicon bold: the merged
  * volume fills the tile instead of shrinking inside a five-by-five margin.
  *
- * `bloomX`/`bloomY` are unit vectors away from the centre of the *mass* rather
- * than the centre of the box, so the travelling cells move farthest and the
- * volume itself only opens slightly — expansion reads as the object breathing,
- * not as an explosion.
+ * `bloomX`/`bloomY` are unit vectors away from the centre of mass — the average of
+ * the volume cells' centres, which lands in the keyway rather than in the middle of
+ * any cell — so the outer cells travel farthest and the volume itself only opens
+ * slightly. Expansion reads as the object breathing, not as an explosion.
  */
 export function layoutVoxelCells(variant: VoxelVariant): readonly VoxelCellLayout[] {
   const cells = voxelCells(variant);
@@ -176,34 +176,45 @@ export function layoutVoxelCells(variant: VoxelVariant): readonly VoxelCellLayou
   const size = step * fill;
   const originX = (MARK_VIEWBOX - (extent("column") * step + size)) / 2;
   const originY = (MARK_VIEWBOX - (extent("row") * step + size)) / 2;
-  const volume = cells.filter((cell) => cell.tier === "primary" && (cell.scale ?? 1) === 1);
-  const massX = originX + (edge(volume, "column", "max") - columns) * step * 0.5 + size / 2;
-  const massY = originY + (edge(volume, "row", "max") - rows) * step * 0.5 + size / 2;
-
-  const laid = cells.map((cell) => {
+  const placed = cells.map((cell) => {
     const drift = (cell.depth - 1) * step * shear;
     // Centred in its lattice slot, so a smaller cell stays on the same axis as
     // the cells around it instead of drifting toward the origin.
     const cellSize = size * (cell.scale ?? 1);
     const inset = (size - cellSize) / 2;
-    const rawX = originX + (cell.column - columns) * step + drift + inset;
-    const rawY = originY + (cell.row - rows) * step + drift + inset;
-    const offsetX = rawX + cellSize / 2 - massX;
-    const offsetY = rawY + cellSize / 2 - massY;
+    return {
+      cell,
+      cellSize,
+      x: originX + (cell.column - columns) * step + drift + inset,
+      y: originY + (cell.row - rows) * step + drift + inset,
+    };
+  });
+
+  // The centre of mass is the average of the volume cells' actual centres — not the
+  // centre of the box, which would fall in the keyway and pull the fan off-axis. The
+  // arriving cell is excluded: it is not part of the object being expanded, and
+  // counting it would bias every direction toward wherever it happens to hover.
+  const volume = placed.filter((item) => item.cell.tier === "primary");
+  const mean = (pick: (item: { x: number; y: number; cellSize: number }) => number): number =>
+    volume.reduce((sum, item) => sum + pick(item), 0) / volume.length;
+  const massX = mean((item) => item.x + item.cellSize / 2);
+  const massY = mean((item) => item.y + item.cellSize / 2);
+
+  const laid = placed.map(({ cell, cellSize, x, y }) => {
+    const offsetX = x + cellSize / 2 - massX;
+    const offsetY = y + cellSize / 2 - massY;
     const distance = Math.hypot(offsetX, offsetY);
-    // A cell at the centre of mass has nowhere to travel, and dividing by a
-    // distance that small would give its tiny offset an arbitrary direction. It
-    // stays put, which is also correct: the core is what everything else
-    // assembles around.
-    const settled = distance < step * 0.25;
     return {
       ...cell,
-      x: round(rawX),
-      y: round(rawY),
+      x: round(x),
+      y: round(y),
       size: round(cellSize),
       radius: round(cellSize * (variant === "micro" ? 0.2 : 0.16)),
-      bloomX: settled ? 0 : round(offsetX / distance),
-      bloomY: settled ? 0 : round(offsetY / distance),
+      // `|| 1` covers the one degenerate case — a cell sitting exactly on the mass,
+      // where the direction is genuinely undefined and staying put is the answer. No
+      // cell of this lattice is closer than 0.4 of a step, so nothing stays put today.
+      bloomX: round(offsetX / (distance || 1)),
+      bloomY: round(offsetY / (distance || 1)),
       stagger: Math.round((distance / step) * 10) / 10,
     };
   });
