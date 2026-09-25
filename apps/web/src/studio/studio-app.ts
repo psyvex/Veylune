@@ -2,6 +2,7 @@ import type { CapabilityProfile } from "../runtime/capabilities";
 import { mountCaptureApp, type CaptureApp } from "../capture/capture-app";
 import { IndexedDbProjectStore } from "../storage/indexeddb";
 import { isSupportedImage, relativeName, StudioProjectService, type ProjectWithAssets } from "./project-service";
+import { analyzeImageFile, categorizeQuality, findDuplicateGroups, qualityReasonLabel } from "./image-analysis";
 import { mountVeyluneLoader, type VeyluneLoader } from "../branding/veylune-loader";
 import { voxelBloomSvg } from "../branding/voxel-bloom";
 
@@ -13,6 +14,7 @@ const THEMES: readonly { id: Theme; name: string; detail: string }[] = [{ id: "o
 export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfile): { dispose(): void } {
   const service = new StudioProjectService(new IndexedDbProjectStore());
   let selectedFiles: File[] = [];
+  let scanToken = 0;
   let activeCapture: CaptureApp | undefined;
   let activeAssetUrls: string[] = [];
   // The import button's loader, kept so a route change or an unmount can stop its
@@ -86,11 +88,49 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
     const error = content.querySelector<HTMLElement>("[data-import-error]")!;
     error.textContent = rejectedCount ? `${rejectedCount} unsupported or empty file${rejectedCount === 1 ? " was" : "s were"} skipped.` : "";
     list.hidden = supported.length === 0;
-    if (!supported.length) { list.innerHTML = ""; return; }
+    if (!supported.length) { list.innerHTML = ""; scanToken += 1; return; }
     const name = inferName(supported);
-    list.innerHTML = `<div class="selected-heading"><div><p class="overline">READY TO IMPORT</p><h2>${supported.length} image${supported.length === 1 ? "" : "s"} selected</h2></div><button type="button" class="quiet-button" data-action="clear-files">Clear</button></div><label class="project-name-label" for="new-project-name">Project name</label><input class="project-name-input" id="new-project-name" value="${escapeHTML(name)}" maxlength="120"><div class="file-list">${supported.slice(0,6).map((file) => `<div><span class="file-type-mark">${escapeHTML(file.name.split(".").pop()?.slice(0,4).toUpperCase() ?? "IMG")}</span><span class="file-name">${escapeHTML(relativeName(file))}</span><span class="file-size">${formatBytes(file.size)}</span></div>`).join("")}${supported.length > 6 ? `<p class="more-files">and ${supported.length - 6} more images</p>` : ""}</div><button class="action-primary import-submit" type="button" data-action="import-submit">Save project locally <span>→</span></button>`;
+    list.innerHTML = `<div class="selected-heading"><div><p class="overline">READY TO IMPORT</p><h2>${supported.length} image${supported.length === 1 ? "" : "s"} selected</h2></div><button type="button" class="quiet-button" data-action="clear-files">Clear</button></div><p class="import-scan-note" data-scan-note hidden></p><label class="project-name-label" for="new-project-name">Project name</label><input class="project-name-input" id="new-project-name" value="${escapeHTML(name)}" maxlength="120"><div class="file-list">${supported.slice(0,6).map((file, index) => `<div data-file-index="${index}"><span class="file-type-mark">${escapeHTML(file.name.split(".").pop()?.slice(0,4).toUpperCase() ?? "IMG")}</span><span class="file-name">${escapeHTML(relativeName(file))}</span><span class="file-size">${formatBytes(file.size)}</span><span data-quality-chip></span></div>`).join("")}${supported.length > 6 ? `<p class="more-files">and ${supported.length - 6} more images</p>` : ""}</div><button class="action-primary import-submit" type="button" data-action="import-submit">Save project locally <span>→</span></button>`;
     list.querySelector('[data-action="clear-files"]')!.addEventListener("click", () => showSelectedFiles([]));
     list.querySelector('[data-action="import-submit"]')!.addEventListener("click", () => { const input = list.querySelector<HTMLInputElement>("#new-project-name")!; void saveImport(input.value); });
+    void runQualityScan(supported, list);
+  }
+
+  /**
+   * Local, model-free quality/duplicate scan over the selected files (see
+   * studio/image-analysis.ts): flags blurry/dark/small photos per row and
+   * reports near-duplicates across the whole selection, per Phase 1 of
+   * docs/06-roadmap-and-acceptance.md. Runs after the file list already
+   * rendered, so a large selection never blocks showing it; `scanToken`
+   * lets a newer selection or a cleared list abandon a scan in flight.
+   */
+  async function runQualityScan(files: readonly File[], list: HTMLElement): Promise<void> {
+    const token = ++scanToken;
+    const hashes: string[] = [];
+    for (let index = 0; index < files.length; index += 1) {
+      if (disposed || token !== scanToken) return;
+      try {
+        const signature = await analyzeImageFile(files[index]!);
+        hashes.push(signature.hash);
+        if (index < 6) {
+          const chip = list.querySelector<HTMLElement>(`[data-file-index="${index}"] [data-quality-chip]`);
+          const quality = categorizeQuality(signature);
+          if (chip && quality.level === "low") {
+            chip.innerHTML = `<span class="chip" data-state="warning"><span class="chip-dot"></span>${escapeHTML(quality.reasons.map(qualityReasonLabel).join(" · "))}</span>`;
+          }
+        }
+      } catch {
+        hashes.push(""); // Undecodable file: excluded from duplicate grouping, not flagged as a false duplicate.
+      }
+    }
+    if (disposed || token !== scanToken) return;
+    const groups = findDuplicateGroups(hashes);
+    const duplicateCount = groups.reduce((total, group) => total + group.length - 1, 0);
+    const note = list.querySelector<HTMLElement>("[data-scan-note]");
+    if (note && duplicateCount > 0) {
+      note.hidden = false;
+      note.textContent = `${duplicateCount} image${duplicateCount === 1 ? "" : "s"} look${duplicateCount === 1 ? "s" : ""} like a duplicate of another in this selection.`;
+    }
   }
 
   async function saveImport(name: string): Promise<void> {
