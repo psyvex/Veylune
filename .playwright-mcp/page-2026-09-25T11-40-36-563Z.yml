@@ -1,0 +1,66 @@
+- generic [active] [ref=f21e1]:
+  - generic [ref=f21e3]:
+    - complementary [ref=f21e4]:
+      - link "Veylune Studio home" [ref=f21e5] [cursor=pointer]:
+        - /url: /studio/overview
+        - generic [ref=f21e19]:
+          - generic [ref=f21e20]: Veylune
+          - generic [ref=f21e21]: STUDIO
+      - button "P Personal workspace Local library ⌄" [ref=f21e23] [cursor=pointer]:
+        - generic [ref=f21e24]: P
+        - generic [ref=f21e25]:
+          - generic [ref=f21e26]: Personal workspace
+          - generic [ref=f21e27]: Local library
+        - generic [ref=f21e28]: ⌄
+      - navigation "Main navigation" [ref=f21e29]:
+        - paragraph [ref=f21e30]: WORKSPACE
+        - link "Overview" [ref=f21e31] [cursor=pointer]:
+          - /url: /studio/overview
+          - generic [aria-hidden] [ref=f21e32]: ◫
+          - text: Overview
+        - link "Projects" [ref=f21e34] [cursor=pointer]:
+          - /url: /studio/projects
+          - generic [aria-hidden] [ref=f21e35]: ▦
+          - text: Projects
+        - link "Capture" [ref=f21e36] [cursor=pointer]:
+          - /url: /studio/capture
+          - generic [aria-hidden] [ref=f21e37]: ◎
+          - text: Capture
+        - link "Preferences" [ref=f21e38] [cursor=pointer]:
+          - /url: /studio/settings
+          - generic [aria-hidden] [ref=f21e39]: ⌘
+          - text: Preferences
+        - paragraph [ref=f21e40]: TOOLS
+        - link "Import images" [ref=f21e41] [cursor=pointer]:
+          - /url: /studio/import
+          - generic [aria-hidden] [ref=f21e42]: ↥
+          - text: Import images
+      - generic [ref=f21e43]:
+        - link "Back to marketing site" [ref=f21e44] [cursor=pointer]:
+          - /url: /
+          - text: ← Veylune.com
+        - generic [ref=f21e47]:
+          - generic [ref=f21e48]: Private by design
+          - generic [ref=f21e49]: Files stay in this browser
+        - button "P Personal Local account ···" [ref=f21e51] [cursor=pointer]:
+          - generic [ref=f21e52]: P
+          - generic [ref=f21e53]:
+            - generic [ref=f21e54]: Personal
+            - generic [ref=f21e55]: Local account
+          - generic [ref=f21e56]: ···
+    - generic [ref=f21e57]:
+      - banner [ref=f21e58]:
+        - generic [ref=f21e59]:
+          - generic [ref=f21e60]: Workspace
+          - generic [ref=f21e61]: /
+          - generic [ref=f21e62]: Overview
+        - generic [ref=f21e63]:
+          - generic [ref=f21e64]: LOCAL PROJECTS
+          - button "Switch between light and dark theme" [ref=f21e66] [cursor=pointer]
+          - link "New project" [ref=f21e72] [cursor=pointer]:
+            - /url: /studio/import
+            - generic [aria-hidden] [ref=f21e73]: ＋
+            - text: New project
+      - main [ref=f21e74]
+  - status [ref=f21e75]:
+    - generic [aria-hidden] [ref=f21e88]: VEYLUNE

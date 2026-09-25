@@ -16,12 +16,26 @@ export class StudioProjectService {
    * history, any saved reconstruction session) in a single store transaction. */
   deleteProject(projectId: string): Promise<void> { return this.store.deleteProject(projectId); }
 
+  async renameProject(projectId: string, name: string): Promise<void> {
+    const projects = await this.store.listProjects();
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) throw new Error("Project not found.");
+    await this.store.writeProjectMetadata({ ...project, name, updatedAt: this.now().toISOString() });
+  }
+
   /** Deletes every project on this device. Used by the "Clear all local data"
    * action in Preferences; the caller is responsible for confirming with the
    * user first, since this cannot be undone. */
   async clearAllProjects(): Promise<void> {
     const projects = await this.store.listProjects();
     for (const project of projects) await this.store.deleteProject(project.id);
+  }
+
+  async loadThumbnail(project: { id: string; assetIds: readonly string[] }): Promise<string | undefined> {
+    if (!project.assetIds.length) return undefined;
+    const [first] = await this.store.readArtifacts([project.assetIds[0]!]);
+    if (!first) return undefined;
+    return URL.createObjectURL(new Blob([first.data], { type: first.record.mediaType }));
   }
 
   async loadProject(projectId: string): Promise<ProjectWithAssets | undefined> {
@@ -31,7 +45,7 @@ export class StudioProjectService {
     return { ...project, assets: assets.map(({ record, data }) => ({ id: record.id, name: record.provenance ?? record.id, type: record.mediaType, size: record.byteLength, url: URL.createObjectURL(new Blob([data], { type: record.mediaType })) })) };
   }
 
-  async importImages(files: readonly File[], requestedName: string): Promise<StudioProjectRecord> {
+  async importImages(files: readonly File[], requestedName: string, plyContent?: string): Promise<StudioProjectRecord> {
     const images = files.filter(isSupportedImage);
     if (!images.length) throw new Error("Choose one or more supported image files to import.");
     if (images.length > 1000) throw new Error("A project can contain up to 1,000 images at a time.");
@@ -51,6 +65,14 @@ export class StudioProjectService {
         const mediaType = file.type || mimeFromName(file.name);
         await this.store.stageArtifact({ id: assetId, hash, byteLength: data.byteLength, mediaType, createdAt, provenance: relativeName(file) }, data);
       }
+      if (plyContent) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(plyContent).buffer as ArrayBuffer;
+        const hash = await sha256Hex(data);
+        const plyId = `${id}:ply:${hash.slice(0, 12)}`;
+        assetIds.push(plyId);
+        await this.store.stageArtifact({ id: plyId, hash, byteLength: data.byteLength, mediaType: "model/x-ply", createdAt, provenance: "scan.ply" }, data);
+      }
       const project: StudioProjectRecord = { id, name, createdAt, updatedAt: createdAt, assetIds };
       await this.store.writeProjectMetadata(project);
       await this.store.commitRevision({ projectId: id, revision: 0, schemaVersion: 1, artifactIds: assetIds });
@@ -60,6 +82,20 @@ export class StudioProjectService {
       await this.store.deleteArtifacts(assetIds).catch(() => undefined);
       throw error;
     }
+  }
+
+  async attachPly(projectId: string, plyContent: string): Promise<void> {
+    const projects = await this.store.listProjects();
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) throw new Error("Project not found.");
+    const encoder = new TextEncoder();
+    const data = encoder.encode(plyContent).buffer as ArrayBuffer;
+    const hash = await sha256Hex(data);
+    const plyId = `${projectId}:ply:${hash.slice(0, 12)}`;
+    const existing = project.assetIds.filter((id) => !id.includes(":ply:"));
+    const assetIds = [...existing, plyId];
+    await this.store.stageArtifact({ id: plyId, hash, byteLength: data.byteLength, mediaType: "model/x-ply", createdAt: this.now().toISOString(), provenance: "scan.ply" }, data);
+    await this.store.writeProjectMetadata({ ...project, assetIds, updatedAt: this.now().toISOString() });
   }
 }
 

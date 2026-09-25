@@ -45,7 +45,7 @@ export function detectCapabilities(): CapabilityProfile {
   };
 
   return {
-    webgpu: supported("gpu" in global),
+    webgpu: supported("navigator" in global && "gpu" in navigator),
     wasm: supported("WebAssembly" in global),
     wasmSimd: "WebAssembly" in global ? "unknown" : "unsupported",
     workers: supported("Worker" in global),

@@ -8,9 +8,15 @@ export default defineConfig({
       input: "index.html",
     },
   },
+
+  server: {
+    allowedHosts: ["parenting-pants-suzuki-furnished.trycloudflare.com"],
+  },
+
   worker: {
     format: "es",
   },
+
   test: {
     environment: "jsdom",
     setupFiles: "./src/test-setup.ts",

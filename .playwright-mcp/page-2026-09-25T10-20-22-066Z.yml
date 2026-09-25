@@ -1,0 +1,91 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - navigation "Main navigation" [ref=e5]:
+        - link "Overview" [ref=e6] [cursor=pointer]:
+          - /url: /studio/overview
+          - generic [aria-hidden] [ref=e7]: ◫
+          - text: Overview
+        - link "Projects" [ref=e9] [cursor=pointer]:
+          - /url: /studio/projects
+          - generic [aria-hidden] [ref=e10]: ▦
+          - text: Projects
+        - link "Capture" [ref=e11] [cursor=pointer]:
+          - /url: /studio/capture
+          - generic [aria-hidden] [ref=e12]: ◎
+          - text: Capture
+        - link "Preferences" [ref=e13] [cursor=pointer]:
+          - /url: /studio/settings
+          - generic [aria-hidden] [ref=e14]: ⌘
+          - text: Preferences
+        - link "Import images" [ref=e15] [cursor=pointer]:
+          - /url: /studio/import
+          - generic [aria-hidden] [ref=e16]: ↥
+          - text: Import images
+    - generic [ref=e17]:
+      - banner [ref=e18]:
+        - generic [ref=e19]:
+          - generic [ref=e20]: Workspace
+          - generic [ref=e21]: /
+          - generic [ref=e22]: Overview
+        - generic [ref=e23]:
+          - button "Switch between light and dark theme" [ref=e24] [cursor=pointer]
+          - link "New project" [ref=e30] [cursor=pointer]:
+            - /url: /studio/import
+            - generic [aria-hidden] [ref=e31]: ＋
+            - text: New project
+      - main [ref=e32]:
+        - generic [ref=e33]:
+          - generic [ref=e34]:
+            - paragraph [ref=e35]: YOUR RECONSTRUCTION WORKSPACE
+            - heading "Make something real." [level=1] [ref=e36]
+            - paragraph [ref=e37]: Turn photos and camera scans into detailed 3D captures. Everything is processed and stored on this device.
+            - generic [ref=e38]:
+              - link "＋ Import images" [ref=e39] [cursor=pointer]:
+                - /url: /studio/import
+              - link "◎ Start a capture" [ref=e40] [cursor=pointer]:
+                - /url: /studio/capture
+          - generic [aria-hidden] [ref=e41]:
+            - generic [ref=e51]: X +02.481
+            - generic [ref=e52]: Y −11.203
+            - generic [ref=e53]: Z +04.782
+            - generic [ref=e54]: SPATIAL ENGINE READY
+        - generic [ref=e55]:
+          - generic [ref=e56]:
+            - generic [ref=e57]: TOTAL PROJECTS
+            - generic [ref=e58]: "00"
+            - text: Saved on this device
+          - generic [ref=e59]:
+            - generic [ref=e60]: SOURCE IMAGES
+            - generic [ref=e61]: "00"
+            - text: Available to your projects
+          - generic [ref=e62]:
+            - generic [ref=e63]: PROCESSING
+            - generic [ref=e64]: LOCAL
+            - text: No cloud uploads
+        - generic [ref=e65]:
+          - generic [ref=e66]:
+            - generic [ref=e67]:
+              - paragraph [ref=e68]: PICK UP WHERE YOU LEFT OFF
+              - heading "Recent projects" [level=2] [ref=e69]
+            - link "View all projects ↗" [ref=e70] [cursor=pointer]:
+              - /url: /studio/projects
+          - generic [ref=e71]:
+            - generic [ref=e72]: ＋
+            - heading "Your first project starts here" [level=2] [ref=e73]
+            - paragraph [ref=e74]: Import a photo set from your computer or start a live camera capture.
+            - generic [ref=e75]:
+              - link "Import images" [ref=e76] [cursor=pointer]:
+                - /url: /studio/import
+              - link "Start a capture" [ref=e77] [cursor=pointer]:
+                - /url: /studio/capture
+        - generic [ref=e78]:
+          - generic [ref=e79]: "01"
+          - generic [ref=e80]:
+            - paragraph [ref=e81]: NEW TO VEYLUNE?
+            - heading "From images to spatial insight" [level=3] [ref=e82]
+            - paragraph [ref=e83]: Import a set of photos from your computer or capture a subject from multiple angles.
+          - link "Explore import workflow →" [ref=e84] [cursor=pointer]:
+            - /url: /studio/import
+  - status [ref=e85]:
+    - generic [aria-hidden] [ref=e98]: VEYLUNE

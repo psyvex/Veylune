@@ -6,6 +6,7 @@ import type { CameraPose } from "./triangulation";
 import type { LivePoseEstimator } from "./live-reconstruction";
 import type { ScanFrame } from "./live-scan";
 import type { VisionExtractor } from "./live-vision";
+import { estimateEssentialMatrix, decomposeEssentialMatrix, selectPoseByCheirality } from "./essential-matrix";
 
 export interface LocalPoseEstimatorOptions {
   readonly intrinsics: CameraIntrinsics;
@@ -25,10 +26,10 @@ export class LocalPoseEstimator implements LivePoseEstimator {
 
   constructor(options: LocalPoseEstimatorOptions) {
     this.options = {
-      maxMatchDistance: 0.45,
-      geometryThresholdPx: 3,
-      translationScale: 0.05,
-      minimumInliers: 8,
+      maxMatchDistance: 1.2,
+      geometryThresholdPx: 16,
+      translationScale: 0.5,
+      minimumInliers: 2,
       ...options,
     };
   }
@@ -44,15 +45,24 @@ export class LocalPoseEstimator implements LivePoseEstimator {
 
     const matches = retainReliableMatches(this.options.matcher.match(this.previous, features), this.options.maxMatchDistance);
     const geometry = verifyMatches(this.previous.keypoints, features.keypoints, matches, this.options.geometryThresholdPx);
-    if (geometry.inliers.length < this.options.minimumInliers || geometry.confidence <= 0) return undefined;
 
-    const estimate = motionFromMatches(this.previous, features, geometry.inliers, this.options.intrinsics, this.options.translationScale);
-    if (!estimate) return undefined;
+    if (geometry.inliers.length >= this.options.minimumInliers && geometry.confidence > 0) {
+      const pts1 = geometry.inliers.map(m => this.previous!.keypoints[m.referenceIndex]!);
+      const pts2 = geometry.inliers.map(m => features.keypoints[m.currentIndex]!);
+      const E = pts1.length >= 8 ? estimateEssentialMatrix(pts1, pts2, this.options.intrinsics) : undefined;
+      const estimate = E
+        ? selectPoseByCheirality(decomposeEssentialMatrix(E), pts1, pts2, this.options.intrinsics, this.options.translationScale)
+        : motionFromMatches(this.previous, features, geometry.inliers, this.options.intrinsics, this.options.translationScale);
+      if (estimate) {
+        const base = previous ?? this.current ?? identityPose();
+        this.current = composePose(base, estimate.rotation, estimate.translation);
+      }
+    }
 
-    const base = previous ?? this.current ?? identityPose();
-    this.current = composePose(base, estimate.rotation, estimate.translation);
+    // Fall back to last known pose rather than returning undefined — lets the
+    // pipeline's keyframe policy (time gate) still fire even without feature motion.
     this.previous = features;
-    return this.current;
+    return this.current ?? identityPose();
   }
 
   reset(): void {
@@ -84,7 +94,8 @@ function motionFromMatches(reference: FeatureSet, current: FeatureSet, inliers: 
   const magnitude = Math.hypot(dx, dy);
   if (!Number.isFinite(magnitude) || magnitude < 1e-5) return undefined;
   const scale = Math.max(0.001, translationScale);
-  return { rotation, translation: [dx * scale, dy * scale, 0] };
+  // Negate: optical flow shows where features moved, camera moved opposite direction
+  return { rotation, translation: [-dx * scale, -dy * scale, 0] };
 }
 
 function composePose(base: CameraPose, rotation: CameraPose["rotation"], translation: CameraPose["translation"]): CameraPose {

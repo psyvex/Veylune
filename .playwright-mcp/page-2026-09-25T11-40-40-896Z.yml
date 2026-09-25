@@ -1,0 +1,115 @@
+- generic [ref=f21e3]:
+  - complementary [ref=f21e4]:
+    - link "Veylune Studio home" [ref=f21e5] [cursor=pointer]:
+      - /url: /studio/overview
+      - generic [ref=f21e19]:
+        - generic [ref=f21e20]: Veylune
+        - generic [ref=f21e21]: STUDIO
+    - button "P Personal workspace Local library ⌄" [ref=f21e23] [cursor=pointer]:
+      - generic [ref=f21e24]: P
+      - generic [ref=f21e25]:
+        - generic [ref=f21e26]: Personal workspace
+        - generic [ref=f21e27]: Local library
+      - generic [ref=f21e28]: ⌄
+    - navigation "Main navigation" [ref=f21e29]:
+      - paragraph [ref=f21e30]: WORKSPACE
+      - link "Overview" [ref=f21e31] [cursor=pointer]:
+        - /url: /studio/overview
+        - generic [aria-hidden] [ref=f21e32]: ◫
+        - text: Overview
+      - link "Projects" [ref=f21e34] [cursor=pointer]:
+        - /url: /studio/projects
+        - generic [aria-hidden] [ref=f21e35]: ▦
+        - text: Projects
+      - link "Capture" [ref=f21e36] [cursor=pointer]:
+        - /url: /studio/capture
+        - generic [aria-hidden] [ref=f21e37]: ◎
+        - text: Capture
+      - link "Preferences" [ref=f21e38] [cursor=pointer]:
+        - /url: /studio/settings
+        - generic [aria-hidden] [ref=f21e39]: ⌘
+        - text: Preferences
+      - paragraph [ref=f21e40]: TOOLS
+      - link "Import images" [ref=f21e41] [cursor=pointer]:
+        - /url: /studio/import
+        - generic [aria-hidden] [ref=f21e42]: ↥
+        - text: Import images
+    - generic [ref=f21e43]:
+      - link "Back to marketing site" [ref=f21e44] [cursor=pointer]:
+        - /url: /
+        - text: ← Veylune.com
+      - generic [ref=f21e47]:
+        - generic [ref=f21e48]: Private by design
+        - generic [ref=f21e49]: Files stay in this browser
+      - button "P Personal Local account ···" [ref=f21e51] [cursor=pointer]:
+        - generic [ref=f21e52]: P
+        - generic [ref=f21e53]:
+          - generic [ref=f21e54]: Personal
+          - generic [ref=f21e55]: Local account
+        - generic [ref=f21e56]: ···
+  - generic [ref=f21e57]:
+    - banner [ref=f21e58]:
+      - generic [ref=f21e59]:
+        - generic [ref=f21e60]: Workspace
+        - generic [ref=f21e61]: /
+        - generic [ref=f21e62]: Overview
+      - generic [ref=f21e63]:
+        - generic [ref=f21e64]: LOCAL PROJECTS
+        - button "Switch between light and dark theme" [ref=f21e66] [cursor=pointer]
+        - link "New project" [ref=f21e72] [cursor=pointer]:
+          - /url: /studio/import
+          - generic [aria-hidden] [ref=f21e73]: ＋
+          - text: New project
+    - main [ref=f21e74]:
+      - generic [ref=f21e89]:
+        - generic [ref=f21e90]:
+          - paragraph [ref=f21e91]: YOUR RECONSTRUCTION WORKSPACE
+          - heading "Make something real." [level=1] [ref=f21e92]
+          - paragraph [ref=f21e93]: Turn photos and camera scans into detailed 3D captures. Everything is processed and stored on this device.
+          - generic [ref=f21e94]:
+            - link "＋ Import images" [ref=f21e95] [cursor=pointer]:
+              - /url: /studio/import
+            - link "◎ Start a capture" [ref=f21e96] [cursor=pointer]:
+              - /url: /studio/capture
+        - generic [aria-hidden] [ref=f21e97]:
+          - generic [ref=f21e107]: X +02.481
+          - generic [ref=f21e108]: Y −11.203
+          - generic [ref=f21e109]: Z +04.782
+          - generic [ref=f21e110]: SPATIAL ENGINE READY
+      - generic [ref=f21e111]:
+        - generic [ref=f21e112]:
+          - generic [ref=f21e113]: TOTAL PROJECTS
+          - generic [ref=f21e114]: "00"
+          - text: Saved on this device
+        - generic [ref=f21e115]:
+          - generic [ref=f21e116]: SOURCE IMAGES
+          - generic [ref=f21e117]: "00"
+          - text: Available to your projects
+        - generic [ref=f21e118]:
+          - generic [ref=f21e119]: PROCESSING
+          - generic [ref=f21e120]: LOCAL
+          - text: No cloud uploads
+      - generic [ref=f21e121]:
+        - generic [ref=f21e122]:
+          - generic [ref=f21e123]:
+            - paragraph [ref=f21e124]: PICK UP WHERE YOU LEFT OFF
+            - heading "Recent projects" [level=2] [ref=f21e125]
+          - link "View all projects ↗" [ref=f21e126] [cursor=pointer]:
+            - /url: /studio/projects
+        - generic [ref=f21e127]:
+          - generic [ref=f21e128]: ＋
+          - heading "Your first project starts here" [level=2] [ref=f21e129]
+          - paragraph [ref=f21e130]: Import a photo set from your computer or start a live camera capture.
+          - generic [ref=f21e131]:
+            - link "Import images" [ref=f21e132] [cursor=pointer]:
+              - /url: /studio/import
+            - link "Start a capture" [ref=f21e133] [cursor=pointer]:
+              - /url: /studio/capture
+      - generic [ref=f21e134]:
+        - generic [ref=f21e135]: "01"
+        - generic [ref=f21e136]:
+          - paragraph [ref=f21e137]: NEW TO VEYLUNE?
+          - heading "From images to spatial insight" [level=3] [ref=f21e138]
+          - paragraph [ref=f21e139]: Import a set of photos from your computer or capture a subject from multiple angles.
+        - link "Explore import workflow →" [ref=f21e140] [cursor=pointer]:
+          - /url: /studio/import

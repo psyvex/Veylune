@@ -5,11 +5,13 @@ export interface KeyframePolicyOptions { readonly minConfidence?: number; readon
 
 export class KeyframePolicy {
   private readonly options: Required<KeyframePolicyOptions>;
-  constructor(options: KeyframePolicyOptions = {}) { this.options = { minConfidence: 0.55, minInliers: 12, minTranslation: 0.03, minRotationRad: 0.05, maxIntervalMs: 1500, ...options }; }
+  constructor(options: KeyframePolicyOptions = {}) { this.options = { minConfidence: 0.45, minInliers: 8, minTranslation: 0.02, minRotationRad: 0.04, maxIntervalMs: 2000, ...options }; }
   shouldInsert(input: KeyframeDecisionInput): boolean {
     if (input.force) return true;
+    // Time-based force: bypass quality gate when too long since last keyframe
+    if (input.elapsedMs >= this.options.maxIntervalMs) return true;
     if (input.confidence < this.options.minConfidence || input.inliers < this.options.minInliers) return false;
-    return input.translationDelta >= this.options.minTranslation || input.rotationDeltaRad >= this.options.minRotationRad || input.elapsedMs >= this.options.maxIntervalMs;
+    return input.translationDelta >= this.options.minTranslation || input.rotationDeltaRad >= this.options.minRotationRad;
   }
 }
 

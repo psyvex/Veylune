@@ -1,0 +1,73 @@
+- generic [active] [ref=f27e1]:
+  - generic [ref=f27e3]:
+    - complementary [ref=f27e4]:
+      - navigation "Main navigation" [ref=f27e5]:
+        - link "Overview" [ref=f27e6] [cursor=pointer]:
+          - /url: /studio/overview
+          - generic [aria-hidden] [ref=f27e7]: ◫
+          - text: Overview
+        - link "Projects" [ref=f27e8] [cursor=pointer]:
+          - /url: /studio/projects
+          - generic [aria-hidden] [ref=f27e9]: ▦
+          - text: Projects
+        - link "Capture" [ref=f27e10] [cursor=pointer]:
+          - /url: /studio/capture
+          - generic [aria-hidden] [ref=f27e11]: ◎
+          - text: Capture
+        - link "Preferences" [ref=f27e12] [cursor=pointer]:
+          - /url: /studio/settings
+          - generic [aria-hidden] [ref=f27e13]: ⌘
+          - text: Preferences
+        - link "Import images" [ref=f27e14] [cursor=pointer]:
+          - /url: /studio/import
+          - generic [aria-hidden] [ref=f27e15]: ↥
+          - text: Import images
+    - generic [ref=f27e17]:
+      - banner [ref=f27e18]:
+        - link "Back to Veylune site" [ref=f27e19] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f27e33]: Veylune
+        - generic [ref=f27e34]:
+          - button "Switch between light and dark theme" [ref=f27e35] [cursor=pointer]
+          - link "New project" [ref=f27e41] [cursor=pointer]:
+            - /url: /studio/import
+            - generic [aria-hidden] [ref=f27e42]: ＋
+            - text: New project
+      - main [ref=f27e43]:
+        - generic [ref=f27e45]:
+          - paragraph [ref=f27e46]: LOCAL FILE IMPORT
+          - heading "Bring your images in." [level=1] [ref=f27e47]
+          - paragraph [ref=f27e48]: Choose individual photos or an entire folder. Files are saved locally in this browser.
+        - generic [ref=f27e49]:
+          - button "Choose or drop image files to import" [ref=f27e51]:
+            - generic [aria-hidden] [ref=f27e52]: ↥
+            - heading "Drop images here" [level=2] [ref=f27e53]
+            - paragraph [ref=f27e54]: or browse your computer to select JPG, PNG, WebP, AVIF, HEIC, or TIFF files
+            - generic [ref=f27e55]:
+              - button "Choose images" [ref=f27e56]
+              - button "Choose folder" [ref=f27e57]
+            - generic [ref=f27e58]: Up to 1,000 images · Files stay on this device
+          - complementary [ref=f27e59]:
+            - generic [ref=f27e60]:
+              - generic [ref=f27e61]: ✳
+              - heading "Private local storage" [level=3] [ref=f27e62]
+              - paragraph [ref=f27e63]: Your source images are written to this browser’s IndexedDB. Veylune does not upload them.
+              - generic [ref=f27e64]:
+                - generic [ref=f27e65]: Storage
+                - generic [ref=f27e66]: On this device
+              - generic [ref=f27e67]:
+                - generic [ref=f27e68]: Original files
+                - generic [ref=f27e69]: Preserved
+            - generic [ref=f27e70]:
+              - paragraph [ref=f27e71]: SUPPORTED FORMATS
+              - generic [ref=f27e72]:
+                - generic [ref=f27e73]: JPG
+                - generic [ref=f27e74]: PNG
+                - generic [ref=f27e75]: WEBP
+                - generic [ref=f27e76]: AVIF
+                - generic [ref=f27e77]: HEIC
+                - generic [ref=f27e78]: TIFF
+              - paragraph [ref=f27e79]: Choose a directory when importing a complete photo set.
+        - status [ref=f27e80]
+  - status [ref=f27e81]:
+    - generic [aria-hidden] [ref=f27e94]: VEYLUNE

@@ -1,0 +1,217 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - link "Veylune home" [ref=e5] [cursor=pointer]:
+      - /url: "#top"
+      - generic [ref=e19]: veylune
+    - generic [ref=e20]:
+      - navigation "Main navigation" [ref=e21]:
+        - link "Product" [ref=e22] [cursor=pointer]:
+          - /url: "#product"
+        - link "How it works" [ref=e23] [cursor=pointer]:
+          - /url: "#workflow"
+        - link "Privacy" [ref=e24] [cursor=pointer]:
+          - /url: "#privacy"
+        - link "Open Studio" [ref=e25] [cursor=pointer]:
+          - /url: /studio/overview
+          - text: Open Studio ↗
+      - button "Switch between light and dark theme" [ref=e26] [cursor=pointer]
+  - main [ref=e32]:
+    - region [ref=e33]:
+      - generic [ref=e34]:
+        - generic [ref=e35]: SPATIAL CAPTURE / A LOCAL-FIRST WORKSPACE
+        - generic [ref=e36]: READY ON THIS DEVICE
+      - generic [ref=e38]:
+        - img "Interactive three dimensional room scan. Press and hold to grab the room, then drag to spin it a full 360 degrees or tilt it up and down. Release to let go, or use the arrow keys. Use the stage controls to explore capture, alignment, and refinement." [ref=e39]
+        - generic [aria-hidden]:
+          - generic:
+            - generic: CAMERA INPUT
+            - generic: Keyframe 08
+          - generic:
+            - generic: ORBIT
+            - generic: YAW 330° · PITCH +011°
+          - generic:
+            - generic: DEPTH SOLVE
+            - generic: Local pass 04
+          - generic:
+            - generic: POSE GRAPH
+            - generic: 8 views linked
+          - generic:
+            - generic: COVERAGE
+            - generic: 72%
+        - generic [ref=e40]:
+          - generic [ref=e42]: ROOM / KEYFRAME MAP
+          - generic [ref=e43]: —
+          - generic [ref=e44]: DRAG TO ORBIT
+      - generic [ref=e45]:
+        - generic [ref=e46]:
+          - paragraph [ref=e47]: 01 / CAPTURE
+          - paragraph [ref=e48]: Capture the scene
+          - generic [ref=e49]: Move around your subject. Each viewpoint adds another set of visual clues.
+        - group "Explore the reconstruction stages" [ref=e50]:
+          - button "01 Capture" [pressed] [ref=e51] [cursor=pointer]:
+            - generic [ref=e52]: "01"
+            - text: Capture
+          - button "02 Align" [ref=e53] [cursor=pointer]:
+            - generic [ref=e54]: "02"
+            - text: Align
+          - button "03 Refine" [ref=e55] [cursor=pointer]:
+            - generic [ref=e56]: "03"
+            - text: Refine
+      - generic [ref=e57]:
+        - paragraph [ref=e58]: FROM MOVEMENT TO SPATIAL CLARITY
+        - heading [level=1] [ref=e60]:
+          - text: See a space
+          - emphasis [ref=e62]: take shape.
+        - paragraph [ref=e63]: Move around a subject. Veylune aligns each view and refines a spatial map as you capture.
+        - link "Explore Veylune Studio ↗" [ref=e64] [cursor=pointer]:
+          - /url: /studio/capture
+          - text: Explore Veylune Studio
+          - generic [ref=e65]: ↗
+      - link "SCROLL TO EXPLORE" [ref=e66] [cursor=pointer]:
+        - /url: "#product"
+    - region "Veylune principles" [ref=e69]:
+      - generic [ref=e70]: CAPTURE WITH INTENTION
+      - generic [ref=e72]: REFINE AS YOU MOVE
+      - generic [ref=e74]: KEEP YOUR WORK LOCAL
+    - generic [ref=e75]:
+      - generic [ref=e76]:
+        - generic [ref=e77]: THE VEYLUNE METHOD
+        - generic [ref=e78]: 01 — 03
+      - generic [ref=e79]:
+        - heading [level=2] [ref=e80]:
+          - text: Spatial workshould feel
+          - emphasis [ref=e81]: natural.
+        - generic [ref=e82]:
+          - paragraph [ref=e83]: A focused workspace for camera capture, map refinement, and source image organization. Follow the scan without losing sight of the subject.
+          - link "Step inside the studio ↗" [ref=e84] [cursor=pointer]:
+            - /url: /studio/overview
+            - text: Step inside the studio
+            - generic [ref=e85]: ↗
+      - generic [ref=e86]:
+        - article [ref=e87]:
+          - generic [ref=e88]:
+            - generic [ref=e94]: ＋
+            - generic [ref=e95]: LIVE CAPTURE
+          - generic [ref=e97]:
+            - generic [ref=e98]: 01 / CAPTURE
+            - generic [ref=e99]: CAMERA GUIDANCE
+          - heading "Move with intention." [level=3] [ref=e100]
+          - paragraph [ref=e101]: Keep the camera steady, cover the subject from useful angles, and watch map refinement progress while you work.
+        - article [ref=e102]:
+          - generic [ref=e103]:
+            - generic [ref=e104]: ＋
+            - generic [ref=e110]: / LOCAL / PROJECT
+          - generic [ref=e111]:
+            - generic [ref=e112]: 02 / ORGANIZE
+            - generic [ref=e113]: IMAGE SETS
+          - heading "Bring your own frames." [level=3] [ref=e114]
+          - paragraph [ref=e115]: Start a local project from individual images or a folder of source photos.
+        - article [ref=e116]:
+          - generic [ref=e123]:
+            - text: MAP
+            - strong [ref=e124]: REFINING
+          - generic [ref=e125]:
+            - generic [ref=e126]: 03 / REFINE
+            - generic [ref=e127]: VISIBLE PROGRESS
+          - heading "Know what’s happening." [level=3] [ref=e128]
+          - paragraph [ref=e129]: Follow iteration progress and cost signals, with clear recovery when refinement needs another pass.
+    - generic [ref=e130]:
+      - generic [ref=e131]:
+        - generic [ref=e132]:
+          - paragraph [ref=e133]: A CLEAR PATH THROUGH THE WORK
+          - heading [level=2] [ref=e134]:
+            - text: From first frameto
+            - emphasis [ref=e135]: spatial context.
+        - paragraph [ref=e136]: Three deliberate steps. Your files and working map stay close at every stage.
+      - generic [ref=e137]:
+        - article [ref=e138]:
+          - generic [ref=e139]: "01"
+          - generic [ref=e140]: ⌗
+          - paragraph [ref=e141]: 01 — GATHER
+          - heading "Choose a starting point." [level=3] [ref=e142]
+          - generic [ref=e143]: Open a camera capture, or organize a photo set into a new local project.
+        - article [ref=e144]:
+          - generic [ref=e145]: "02"
+          - generic [ref=e146]: ◉
+          - paragraph [ref=e147]: 02 — MOVE
+          - heading "Cover the subject slowly." [level=3] [ref=e148]
+          - generic [ref=e149]: Use capture guidance to collect keyframes from distinct viewpoints.
+        - article [ref=e150]:
+          - generic [ref=e151]: "03"
+          - generic [ref=e152]: ⌁
+          - paragraph [ref=e153]: 03 — REFINE
+          - heading "Review the evolving map." [level=3] [ref=e154]
+          - generic [ref=e155]: See the optimization state and keep your project ready for the next session.
+    - generic [ref=e156]:
+      - generic [ref=e157]:
+        - generic [ref=e158]: INSIDE THE RECONSTRUCTION
+        - generic [ref=e159]: 04 STAGES
+      - generic [ref=e160]:
+        - paragraph [ref=e161]: REAL GEOMETRY, SOLVED LOCALLY
+        - heading [level=2] [ref=e162]:
+          - text: The same math areconstruction
+          - emphasis [ref=e163]: runs on.
+        - paragraph [ref=e164]: Every frame you capture moves through one numerical pipeline — tracked, optimized, and recovered on this device, without a round trip to a server.
+      - generic [ref=e165]:
+        - article [ref=e166]:
+          - generic [ref=e167]: "01"
+          - generic [ref=e168]: ⌁
+          - heading "Track" [level=3] [ref=e169]
+          - paragraph [ref=e170]: Features are matched frame to frame and filtered temporally, giving every keyframe a local pose estimate before it reaches the map.
+          - generic [ref=e171]: FEATURES · LOCAL POSE
+        - article [ref=e172]:
+          - generic [ref=e173]: "02"
+          - generic [ref=e174]: ∑
+          - heading "Solve" [level=3] [ref=e175]
+          - paragraph [ref=e176]: Bundle adjustment minimizes reprojection error across the whole map with a Schur-complement solve over the sparse normal equations.
+          - generic [ref=e177]: BUNDLE ADJUSTMENT
+        - article [ref=e178]:
+          - generic [ref=e179]: "03"
+          - generic [ref=e180]: ⟲
+          - heading "Recover" [level=3] [ref=e181]
+          - paragraph [ref=e182]: Lost tracking relocalizes against the existing map instead of restarting the scan, so a shaky pass doesn't cost you the session.
+          - generic [ref=e183]: RELOCALIZATION
+        - article [ref=e184]:
+          - generic [ref=e185]: "04"
+          - generic [ref=e186]: ▣
+          - heading "Run" [level=3] [ref=e187]
+          - paragraph [ref=e188]: Inference falls back across WebGPU and WASM automatically, so the same pipeline runs on whatever the device supports — no server round-trip.
+          - generic [ref=e189]: ON-DEVICE INFERENCE
+    - generic [ref=e190]:
+      - generic [ref=e191]:
+        - generic [ref=e205]:
+          - text: LOCAL STORAGE
+          - generic [ref=e206]: ACTIVE
+        - generic [ref=e207]:
+          - text: SOURCE FILES
+          - generic [ref=e208]: ON DEVICE
+      - generic [ref=e209]:
+        - paragraph [ref=e210]: PRIVATE BY DEFAULT
+        - heading [level=2] [ref=e211]:
+          - text: Your source filesstay
+          - emphasis [ref=e212]: with you.
+        - paragraph [ref=e213]: Images and project records are stored in this browser on your device. Veylune’s workspace is designed around local access and visible control.
+        - link "Create a private project ↗" [ref=e214] [cursor=pointer]:
+          - /url: /studio/import
+          - text: Create a private project
+          - generic [ref=e215]: ↗
+    - generic [ref=e216]:
+      - group "Veylune identity. Press and hold to grab it, then drag to spin it a full 360 degrees in any direction, or use the arrow keys. Release to let go and it stays where you left it." [ref=e218]
+      - paragraph [ref=e232]: A MORE CONSIDERED WAY TO CAPTURE
+      - heading [level=2] [ref=e233]:
+        - text: Look closer.
+        - emphasis [ref=e234]: Keep more.
+      - link "Open Veylune Studio ↗" [ref=e235] [cursor=pointer]:
+        - /url: /studio/capture
+        - text: Open Veylune Studio
+        - generic [ref=e236]: ↗
+      - generic [ref=e237]: VEYLUNE SPATIAL ENGINE · LOCAL BY DESIGN
+  - contentinfo [ref=e238]:
+    - link "Veylune home" [ref=e239] [cursor=pointer]:
+      - /url: "#top"
+      - generic [ref=e253]: veylune
+    - generic [ref=e254]: Spatial capture, made tangible.
+    - link "Open Studio" [ref=e255] [cursor=pointer]:
+      - /url: /studio/overview
+      - text: Open Studio ↗
+    - generic [ref=e256]: LOCAL BY DESIGN

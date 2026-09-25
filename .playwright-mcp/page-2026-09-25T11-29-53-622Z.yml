@@ -1,0 +1,120 @@
+- generic [active] [ref=f18e1]:
+  - generic [ref=f18e3]:
+    - complementary [ref=f18e4]:
+      - link "Veylune Studio home" [ref=f18e5] [cursor=pointer]:
+        - /url: /studio/overview
+        - generic [ref=f18e19]:
+          - generic [ref=f18e20]: Veylune
+          - generic [ref=f18e21]: STUDIO
+      - button "P Personal workspace Local library ⌄" [ref=f18e23] [cursor=pointer]:
+        - generic [ref=f18e24]: P
+        - generic [ref=f18e25]:
+          - generic [ref=f18e26]: Personal workspace
+          - generic [ref=f18e27]: Local library
+        - generic [ref=f18e28]: ⌄
+      - navigation "Main navigation" [ref=f18e29]:
+        - paragraph [ref=f18e30]: WORKSPACE
+        - link "Overview" [ref=f18e31] [cursor=pointer]:
+          - /url: /studio/overview
+          - generic [aria-hidden] [ref=f18e32]: ◫
+          - text: Overview
+        - link "Projects" [ref=f18e33] [cursor=pointer]:
+          - /url: /studio/projects
+          - generic [aria-hidden] [ref=f18e34]: ▦
+          - text: Projects
+        - link "Capture" [ref=f18e35] [cursor=pointer]:
+          - /url: /studio/capture
+          - generic [aria-hidden] [ref=f18e36]: ◎
+          - text: Capture
+        - link "Preferences" [ref=f18e38] [cursor=pointer]:
+          - /url: /studio/settings
+          - generic [aria-hidden] [ref=f18e39]: ⌘
+          - text: Preferences
+        - paragraph [ref=f18e40]: TOOLS
+        - link "Import images" [ref=f18e41] [cursor=pointer]:
+          - /url: /studio/import
+          - generic [aria-hidden] [ref=f18e42]: ↥
+          - text: Import images
+      - generic [ref=f18e43]:
+        - link "Back to marketing site" [ref=f18e44] [cursor=pointer]:
+          - /url: /
+          - text: ← Veylune.com
+        - generic [ref=f18e47]:
+          - generic [ref=f18e48]: Private by design
+          - generic [ref=f18e49]: Files stay in this browser
+        - button "P Personal Local account ···" [ref=f18e51] [cursor=pointer]:
+          - generic [ref=f18e52]: P
+          - generic [ref=f18e53]:
+            - generic [ref=f18e54]: Personal
+            - generic [ref=f18e55]: Local account
+          - generic [ref=f18e56]: ···
+    - generic [ref=f18e57]:
+      - banner [ref=f18e58]:
+        - generic [ref=f18e59]:
+          - generic [ref=f18e60]: Workspace
+          - generic [ref=f18e61]: /
+          - generic [ref=f18e62]: Capture
+        - generic [ref=f18e63]:
+          - generic [ref=f18e64]: LOCAL PROJECTS
+          - button "Switch between light and dark theme" [ref=f18e66] [cursor=pointer]
+          - link "New project" [ref=f18e72] [cursor=pointer]:
+            - /url: /studio/import
+            - generic [aria-hidden] [ref=f18e73]: ＋
+            - text: New project
+      - main [ref=f18e74]:
+        - generic [ref=f18e75]:
+          - generic [ref=f18e76]:
+            - paragraph [ref=f18e77]: LIVE RECONSTRUCTION
+            - heading "Capture" [level=1] [ref=f18e78]
+            - paragraph [ref=f18e79]: Move slowly around your subject. Refinement runs while you scan.
+          - link "Back to projects ↗" [ref=f18e80] [cursor=pointer]:
+            - /url: /studio/projects
+        - region "Veylune capture workspace" [ref=f18e82]:
+          - generic [ref=f18e83]:
+            - generic [ref=f18e84]: SPATIAL SCAN
+            - generic [ref=f18e85]: Camera off
+          - main [ref=f18e88]:
+            - generic [ref=f18e89]:
+              - generic [ref=f18e90]:
+                - generic "Live camera preview" [ref=f18e91]
+                - generic [ref=f18e92]:
+                  - generic [ref=f18e93]: LIVE
+                  - generic [ref=f18e95]: Waiting for camera
+                - status [ref=f18e96]: Ready to scan
+                - generic [ref=f18e97]:
+                  - button "Start camera" [ref=f18e98] [cursor=pointer]
+                  - button "Flip camera" [ref=f18e99] [cursor=pointer]
+                  - button "Snapshot" [disabled] [ref=f18e105] [cursor=pointer]
+                  - button "Stop" [disabled] [ref=f18e106] [cursor=pointer]
+              - generic [ref=f18e107]:
+                - generic [ref=f18e108]:
+                  - generic [ref=f18e109]: Keyframes
+                  - generic [ref=f18e110]: "0"
+                - generic [ref=f18e111]:
+                  - generic [ref=f18e112]: Map version
+                  - generic [ref=f18e113]: "0"
+                - generic [ref=f18e114]:
+                  - generic [ref=f18e115]: Cost
+                  - generic [ref=f18e116]: —
+                - generic [ref=f18e117]:
+                  - generic [ref=f18e118]: Improvement
+                  - generic [ref=f18e119]: —
+            - complementary "Reconstruction progress" [ref=f18e120]:
+              - paragraph [ref=f18e122]: RECONSTRUCTION
+              - generic [ref=f18e125]:
+                - generic [ref=f18e126]:
+                  - paragraph [ref=f18e127]: REFINEMENT
+                  - generic [ref=f18e128]: Waiting
+                - paragraph [ref=f18e129]: Capture a few keyframes to begin refining your map.
+                - progressbar "Map refinement progress" [ref=f18e130]: 0%
+                - generic [ref=f18e131]:
+                  - generic [ref=f18e132]: 0%
+                  - generic [ref=f18e133]: 0 of 0 iterations
+                - button "Cancel" [disabled] [ref=f18e134]
+              - generic "Browser capabilities" [ref=f18e135]:
+                - generic [ref=f18e136]: Local
+                - generic [ref=f18e137]: WebGPU supported
+                - generic [ref=f18e138]: WASM supported
+                - generic [ref=f18e139]: Workers supported
+  - status [ref=f18e140]:
+    - generic [aria-hidden] [ref=f18e153]: VEYLUNE

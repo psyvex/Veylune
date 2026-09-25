@@ -1,0 +1,94 @@
+- generic [active] [ref=f23e1]:
+  - generic [ref=f23e3]:
+    - complementary [ref=f23e4]:
+      - link "Veylune Studio home" [ref=f23e5] [cursor=pointer]:
+        - /url: /studio/overview
+        - generic [ref=f23e19]:
+          - generic [ref=f23e20]: Veylune
+          - generic [ref=f23e21]: STUDIO
+      - button "P Personal workspace Local library ⌄" [ref=f23e23] [cursor=pointer]:
+        - generic [ref=f23e24]: P
+        - generic [ref=f23e25]:
+          - generic [ref=f23e26]: Personal workspace
+          - generic [ref=f23e27]: Local library
+        - generic [ref=f23e28]: ⌄
+      - navigation "Main navigation" [ref=f23e29]:
+        - paragraph [ref=f23e30]: WORKSPACE
+        - link "Overview" [ref=f23e31] [cursor=pointer]:
+          - /url: /studio/overview
+          - generic [aria-hidden] [ref=f23e32]: ◫
+          - text: Overview
+        - link "Projects" [ref=f23e33] [cursor=pointer]:
+          - /url: /studio/projects
+          - generic [aria-hidden] [ref=f23e34]: ▦
+          - text: Projects
+        - link "Capture" [ref=f23e35] [cursor=pointer]:
+          - /url: /studio/capture
+          - generic [aria-hidden] [ref=f23e36]: ◎
+          - text: Capture
+        - link "Preferences" [ref=f23e37] [cursor=pointer]:
+          - /url: /studio/settings
+          - generic [aria-hidden] [ref=f23e38]: ⌘
+          - text: Preferences
+        - paragraph [ref=f23e40]: TOOLS
+        - link "Import images" [ref=f23e41] [cursor=pointer]:
+          - /url: /studio/import
+          - generic [aria-hidden] [ref=f23e42]: ↥
+          - text: Import images
+      - generic [ref=f23e43]:
+        - link "Back to marketing site" [ref=f23e44] [cursor=pointer]:
+          - /url: /
+          - text: ← Veylune.com
+        - generic [ref=f23e47]:
+          - generic [ref=f23e48]: Private by design
+          - generic [ref=f23e49]: Files stay in this browser
+        - button "P Personal Local account ···" [ref=f23e51] [cursor=pointer]:
+          - generic [ref=f23e52]: P
+          - generic [ref=f23e53]:
+            - generic [ref=f23e54]: Personal
+            - generic [ref=f23e55]: Local account
+          - generic [ref=f23e56]: ···
+    - generic [ref=f23e57]:
+      - banner [ref=f23e58]:
+        - generic [ref=f23e59]:
+          - generic [ref=f23e60]: Workspace
+          - generic [ref=f23e61]: /
+          - generic [ref=f23e62]: Preferences
+        - generic [ref=f23e63]:
+          - generic [ref=f23e64]: LOCAL PROJECTS
+          - button "Switch between light and dark theme" [ref=f23e66] [cursor=pointer]
+          - link "New project" [ref=f23e72] [cursor=pointer]:
+            - /url: /studio/import
+            - generic [aria-hidden] [ref=f23e73]: ＋
+            - text: New project
+      - main [ref=f23e74]:
+        - generic [ref=f23e76]:
+          - paragraph [ref=f23e77]: MAKE IT YOUR SPACE
+          - heading "Preferences" [level=1] [ref=f23e78]
+          - paragraph [ref=f23e79]: Adjust the Studio’s appearance. Your choice is saved on this device and shared with the marketing site.
+        - generic [ref=f23e80]:
+          - generic [ref=f23e81]:
+            - generic [ref=f23e82]:
+              - heading "Appearance" [level=2] [ref=f23e83]
+              - paragraph [ref=f23e84]: One glass theme, light or dark.
+            - generic [ref=f23e85]: Saved automatically
+          - generic [ref=f23e86]:
+            - button "Light Paper surfaces, dark text" [pressed] [ref=f23e87] [cursor=pointer]:
+              - generic [ref=f23e93]:
+                - generic [ref=f23e94]: Light
+                - generic [ref=f23e95]: Paper surfaces, dark text
+              - generic [aria-hidden] [ref=f23e96]: ✓
+            - button "Dark Graphite surfaces, light text" [ref=f23e97] [cursor=pointer]:
+              - generic [ref=f23e103]:
+                - generic [ref=f23e104]: Dark
+                - generic [ref=f23e105]: Graphite surfaces, light text
+              - generic [aria-hidden] [ref=f23e106]: ✓
+        - generic [ref=f23e107]:
+          - generic [ref=f23e109]:
+            - heading "Local-first storage" [level=2] [ref=f23e110]
+            - paragraph [ref=f23e111]: Imported images and project records remain in this browser’s IndexedDB.
+          - generic [ref=f23e114]:
+            - generic [ref=f23e115]: Browser storage enabled
+            - generic [ref=f23e116]: Veylune does not send source images to a server.
+  - status [ref=f23e117]:
+    - generic [aria-hidden] [ref=f23e130]: VEYLUNE

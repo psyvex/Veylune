@@ -1,0 +1,90 @@
+- generic [active] [ref=f26e1]:
+  - generic [ref=f26e3]:
+    - complementary [ref=f26e4]:
+      - navigation "Main navigation" [ref=f26e5]:
+        - link "Overview" [ref=f26e6] [cursor=pointer]:
+          - /url: /studio/overview
+          - generic [aria-hidden] [ref=f26e7]: ◫
+          - text: Overview
+        - link "Projects" [ref=f26e9] [cursor=pointer]:
+          - /url: /studio/projects
+          - generic [aria-hidden] [ref=f26e10]: ▦
+          - text: Projects
+        - link "Capture" [ref=f26e11] [cursor=pointer]:
+          - /url: /studio/capture
+          - generic [aria-hidden] [ref=f26e12]: ◎
+          - text: Capture
+        - link "Preferences" [ref=f26e13] [cursor=pointer]:
+          - /url: /studio/settings
+          - generic [aria-hidden] [ref=f26e14]: ⌘
+          - text: Preferences
+        - link "Import images" [ref=f26e15] [cursor=pointer]:
+          - /url: /studio/import
+          - generic [aria-hidden] [ref=f26e16]: ↥
+          - text: Import images
+    - generic [ref=f26e17]:
+      - banner [ref=f26e18]:
+        - link "Back to Veylune site" [ref=f26e19] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f26e33]: Veylune
+        - generic [ref=f26e34]:
+          - button "Switch between light and dark theme" [ref=f26e35] [cursor=pointer]
+          - link "New project" [ref=f26e41] [cursor=pointer]:
+            - /url: /studio/import
+            - generic [aria-hidden] [ref=f26e42]: ＋
+            - text: New project
+      - main [ref=f26e43]:
+        - generic [ref=f26e44]:
+          - generic [ref=f26e45]:
+            - paragraph [ref=f26e46]: YOUR RECONSTRUCTION WORKSPACE
+            - heading "Make something real." [level=1] [ref=f26e47]
+            - paragraph [ref=f26e48]: Turn photos and camera scans into detailed 3D captures. Everything is processed and stored on this device.
+            - generic [ref=f26e49]:
+              - link "＋ Import images" [ref=f26e50] [cursor=pointer]:
+                - /url: /studio/import
+              - link "◎ Start a capture" [ref=f26e51] [cursor=pointer]:
+                - /url: /studio/capture
+          - generic [aria-hidden] [ref=f26e52]:
+            - generic [ref=f26e62]: X +02.481
+            - generic [ref=f26e63]: Y −11.203
+            - generic [ref=f26e64]: Z +04.782
+            - generic [ref=f26e65]: SPATIAL ENGINE READY
+        - generic [ref=f26e66]:
+          - generic [ref=f26e67]:
+            - generic [ref=f26e68]: TOTAL PROJECTS
+            - generic [ref=f26e69]: "00"
+            - generic [ref=f26e70]: Saved on this device
+          - generic [ref=f26e71]:
+            - generic [ref=f26e72]: SOURCE IMAGES
+            - generic [ref=f26e73]: "00"
+            - generic [ref=f26e74]: Available to your projects
+          - generic [ref=f26e75]:
+            - generic [ref=f26e76]: PROCESSING
+            - generic [ref=f26e77]: LOCAL
+            - generic [ref=f26e78]: No cloud uploads
+        - generic [ref=f26e79]:
+          - generic [ref=f26e80]:
+            - generic [ref=f26e81]:
+              - paragraph [ref=f26e82]: PICK UP WHERE YOU LEFT OFF
+              - heading "Recent projects" [level=2] [ref=f26e83]
+            - link "View all projects ↗" [ref=f26e84] [cursor=pointer]:
+              - /url: /studio/projects
+          - generic [ref=f26e85]:
+            - generic [ref=f26e86]: ＋
+            - heading "Your first project starts here" [level=2] [ref=f26e87]
+            - paragraph [ref=f26e88]: Import a photo set from your computer or start a live camera capture.
+            - generic [ref=f26e89]:
+              - link "Import images" [ref=f26e90] [cursor=pointer]:
+                - /url: /studio/import
+              - link "Start a capture" [ref=f26e91] [cursor=pointer]:
+                - /url: /studio/capture
+        - generic [ref=f26e92]:
+          - generic [ref=f26e93]: "01"
+          - generic [ref=f26e94]:
+            - paragraph [ref=f26e95]: NEW TO VEYLUNE?
+            - heading "From images to spatial insight" [level=3] [ref=f26e96]
+            - paragraph [ref=f26e97]: Import a set of photos from your computer or capture a subject from multiple angles.
+          - link "Explore import workflow →" [ref=f26e98] [cursor=pointer]:
+            - /url: /studio/import
+  - status [ref=f26e99]:
+    - generic [aria-hidden] [ref=f26e112]: VEYLUNE

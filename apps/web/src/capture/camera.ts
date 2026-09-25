@@ -10,7 +10,14 @@ export interface CameraConstraints {
 export interface CameraSession {
   readonly stream: MediaStream;
   readonly video: HTMLVideoElement;
+  readonly facingMode: CameraFacingMode;
   stop(): void;
+}
+
+export async function enumerateVideoInputs(): Promise<MediaDeviceInfo[]> {
+  if (!navigator.mediaDevices?.enumerateDevices) return [];
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  return devices.filter((d) => d.kind === "videoinput");
 }
 
 export async function openCamera(constraints: CameraConstraints): Promise<CameraSession> {
@@ -37,6 +44,7 @@ export async function openCamera(constraints: CameraConstraints): Promise<Camera
   return {
     stream,
     video,
+    facingMode: constraints.facingMode,
     stop() {
       for (const track of stream.getTracks()) track.stop();
       video.srcObject = null;

@@ -98,7 +98,7 @@ function renderUnderlinedLink(href: string, label: string): string {
 // ---------------------------------------------------------------------------------------
 
 function renderHeader(): string {
-  return `<header class="marketing-header">${renderBrandMark({ ariaLabel: "Veylune home" })}<div class="header-actions"><button class="marketing-menu-toggle" type="button" aria-expanded="false" aria-controls="marketing-nav">Menu <span aria-hidden="true">＋</span></button><nav class="marketing-nav" id="marketing-nav" aria-label="Main navigation"><a href="#product">Product</a><a href="#workflow">How it works</a><a href="#privacy">Privacy</a><a class="nav-studio-link" href="/studio/overview">Open Studio <span aria-hidden="true">↗</span></a></nav><button class="theme-toggle" type="button" aria-label="Switch between light and dark theme">${SUN_ICON}${MOON_ICON}</button></div></header>`;
+  return `<header class="marketing-header">${renderBrandMark({ ariaLabel: "Veylune home" })}<div class="header-actions"><button class="theme-toggle" type="button" aria-label="Switch between light and dark theme">${SUN_ICON}${MOON_ICON}</button><nav class="marketing-nav" id="marketing-nav" aria-label="Main navigation"><a href="#product">Product</a><a href="#workflow">How it works</a><a href="#privacy">Privacy</a><a class="nav-studio-link" href="/studio/overview">Open Studio <span aria-hidden="true">↗</span></a></nav><button class="marketing-menu-toggle" type="button" aria-expanded="false" aria-controls="marketing-nav" aria-label="Open navigation"><span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span></button></div></header>`;
 }
 
 /**
@@ -189,7 +189,6 @@ export function mountMarketingPage(root: HTMLElement): { dispose(): void } {
       ${renderPrivacy()}
       ${renderClosing()}
     </main>
-    ${renderFooter()}
   </div>`;
 
   // --- Theme toggle ----------------------------------------------------------------
@@ -203,6 +202,7 @@ export function mountMarketingPage(root: HTMLElement): { dispose(): void } {
   const onMenuClick = (): void => {
     const open = menu.getAttribute("aria-expanded") !== "true";
     menu.setAttribute("aria-expanded", String(open));
+    menu.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
     nav.classList.toggle("is-open", open);
   };
   menu.addEventListener("click", onMenuClick);

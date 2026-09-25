@@ -1,0 +1,92 @@
+- generic [active] [ref=f17e1]:
+  - generic [ref=f17e3]:
+    - complementary [ref=f17e4]:
+      - navigation "Main navigation" [ref=f17e5]:
+        - link "Overview" [ref=f17e6] [cursor=pointer]:
+          - /url: /studio/overview
+          - generic [aria-hidden] [ref=f17e7]: ◫
+          - text: Overview
+        - link "Projects" [ref=f17e8] [cursor=pointer]:
+          - /url: /studio/projects
+          - generic [aria-hidden] [ref=f17e9]: ▦
+          - text: Projects
+        - link "Capture" [ref=f17e10] [cursor=pointer]:
+          - /url: /studio/capture
+          - generic [aria-hidden] [ref=f17e11]: ◎
+          - text: Capture
+        - link "Preferences" [ref=f17e13] [cursor=pointer]:
+          - /url: /studio/settings
+          - generic [aria-hidden] [ref=f17e14]: ⌘
+          - text: Preferences
+        - link "Import images" [ref=f17e15] [cursor=pointer]:
+          - /url: /studio/import
+          - generic [aria-hidden] [ref=f17e16]: ↥
+          - text: Import images
+    - generic [ref=f17e17]:
+      - banner [ref=f17e18]:
+        - link "Back to Veylune site" [ref=f17e19] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f17e33]: Veylune
+        - generic [ref=f17e34]:
+          - button "Switch between light and dark theme" [ref=f17e35] [cursor=pointer]
+          - link "New project" [ref=f17e41] [cursor=pointer]:
+            - /url: /studio/import
+            - generic [aria-hidden] [ref=f17e42]: ＋
+            - text: New project
+      - main [ref=f17e43]:
+        - generic [ref=f17e44]:
+          - generic [ref=f17e45]:
+            - paragraph [ref=f17e46]: LIVE RECONSTRUCTION
+            - heading "Capture" [level=1] [ref=f17e47]
+            - paragraph [ref=f17e48]: Move slowly around your subject. Refinement runs while you scan.
+          - link "Back to projects ↗" [ref=f17e49] [cursor=pointer]:
+            - /url: /studio/projects
+        - region "Veylune capture workspace" [ref=f17e51]:
+          - generic [ref=f17e52]:
+            - generic [ref=f17e53]: SPATIAL SCAN
+            - generic [ref=f17e54]: Camera off
+          - main [ref=f17e57]:
+            - generic [ref=f17e58]:
+              - generic [ref=f17e59]:
+                - generic "Live camera preview" [ref=f17e60]
+                - generic [ref=f17e61]:
+                  - generic [ref=f17e62]: LIVE
+                  - generic [ref=f17e64]: Waiting for camera
+                - status [ref=f17e65]: Ready to scan
+                - generic [ref=f17e66]:
+                  - button "Start camera" [ref=f17e67] [cursor=pointer]
+                  - button "Flip camera" [ref=f17e68] [cursor=pointer]
+                  - button "Snapshot" [disabled] [ref=f17e71] [cursor=pointer]
+                  - button "Stop" [disabled] [ref=f17e72] [cursor=pointer]
+              - generic [ref=f17e73]:
+                - generic [ref=f17e74]:
+                  - generic [ref=f17e75]: Keyframes
+                  - generic [ref=f17e76]: "0"
+                - generic [ref=f17e77]:
+                  - generic [ref=f17e78]: Map version
+                  - generic [ref=f17e79]: "0"
+                - generic [ref=f17e80]:
+                  - generic [ref=f17e81]: Cost
+                  - generic [ref=f17e82]: —
+                - generic [ref=f17e83]:
+                  - generic [ref=f17e84]: Improvement
+                  - generic [ref=f17e85]: —
+            - complementary "Reconstruction progress" [ref=f17e86]:
+              - paragraph [ref=f17e88]: RECONSTRUCTION
+              - generic [ref=f17e91]:
+                - generic [ref=f17e92]:
+                  - paragraph [ref=f17e93]: REFINEMENT
+                  - generic [ref=f17e94]: Waiting
+                - paragraph [ref=f17e95]: Capture a few keyframes to begin refining your map.
+                - progressbar "Map refinement progress" [ref=f17e96]: 0%
+                - generic [ref=f17e97]:
+                  - generic [ref=f17e98]: 0%
+                  - generic [ref=f17e99]: 0 of 0 iterations
+                - button "Cancel" [disabled] [ref=f17e100]
+              - generic "Browser capabilities" [ref=f17e101]:
+                - generic [ref=f17e102]: Local
+                - generic [ref=f17e103]: WebGPU supported
+                - generic [ref=f17e104]: WASM supported
+                - generic [ref=f17e105]: Workers supported
+  - status [ref=f17e106]:
+    - generic [aria-hidden] [ref=f17e119]: VEYLUNE

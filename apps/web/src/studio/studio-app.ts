@@ -1,7 +1,11 @@
 import type { CapabilityProfile } from "../runtime/capabilities";
-import { mountCaptureApp, type CaptureApp } from "../capture/capture-app";
+import { mountCaptureApp, type CaptureApp, type CaptureTelemetry } from "../capture/capture-app";
+import { startBatchReconstruct, type BatchReconstructSession } from "../capture/batch-reconstruct";
+import { mountPointCloudViewer } from "../capture/point-cloud-viewer";
+import { describeTracking, describeOptimization } from "../capture/capture-hud-copy";
 import { IndexedDbProjectStore } from "../storage/indexeddb";
 import { isSupportedImage, relativeName, StudioProjectService, type ProjectWithAssets } from "./project-service";
+import { exportPointCloudPly } from "../capture/export-ply";
 import { analyzeImageFile, categorizeQuality, findDuplicateGroups, qualityReasonLabel } from "./image-analysis";
 import { mountVeyluneLoader, type VeyluneLoader } from "../branding/veylune-loader";
 import { voxelBloomSvg } from "../branding/voxel-bloom";
@@ -15,6 +19,8 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
   let selectedFiles: File[] = [];
   let scanToken = 0;
   let activeCapture: CaptureApp | undefined;
+  let activeBatchSession: BatchReconstructSession | undefined;
+  let activeMapViewer: import("../capture/point-cloud-viewer").PointCloudViewer | undefined;
   let activeAssetUrls: string[] = [];
   // The import button's loader, kept so a route change or an unmount can stop its
   // timers the same way `activeCapture` is stopped.
@@ -29,7 +35,7 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
   // choice, one <html data-theme> attribute, so switching light/dark on
   // either surface carries over to the other.
   initTheme();
-  root.innerHTML = `<div class="studio-shell veylune-glass-theme"><aside class="studio-sidebar"><a class="studio-brand" href="/studio/overview" aria-label="Veylune Studio home"><span class="brand-glyph">${voxelBloomSvg({ variant: "compact" })}</span><span><b>Veylune</b><small>STUDIO</small></span></a><div class="workspace-switch-wrap"><button class="workspace-switch" type="button" data-action="workspace-menu" aria-haspopup="true" aria-expanded="false"><span class="workspace-avatar">P</span><span><b>Personal workspace</b><small>Local library</small></span><span class="switch-chevron">⌄</span></button><div class="popover-menu" data-workspace-menu hidden role="menu"><p class="popover-note">Only one local workspace lives in this browser.</p><a role="menuitem" href="/studio/settings">Preferences</a></div></div><nav class="studio-nav" aria-label="Main navigation"><p class="nav-caption">WORKSPACE</p>${NAV.map((item) => `<a href="/studio/${item.route}" data-nav="${item.route}"><span class="nav-icon" aria-hidden="true">${item.icon}</span>${item.label}<span class="nav-active-mark"></span></a>`).join("")}<p class="nav-caption nav-caption-tools">TOOLS</p><a href="/studio/import" data-nav="import"><span class="nav-icon" aria-hidden="true">↥</span>Import images<span class="nav-active-mark"></span></a></nav><div class="sidebar-bottom"><div class="local-storage-note"><span class="storage-pulse"></span><span><b>Private by design</b><small>Files stay in this browser</small></span></div><div class="profile-button-wrap"><div class="popover-menu popover-menu-up" data-profile-menu hidden role="menu"><a role="menuitem" href="/studio/settings">Preferences</a><button role="menuitem" type="button" data-action="clear-data">Clear all local data</button></div><button class="profile-button" type="button" data-action="profile-menu" aria-haspopup="true" aria-expanded="false"><span class="profile-avatar">P</span><span><b>Personal</b><small>Local account</small></span><span class="switch-chevron">···</span></button></div></div></aside><div class="studio-main"><header class="studio-topbar"><div class="breadcrumbs"><span>Workspace</span><span class="breadcrumb-slash">/</span><b data-page-title>Overview</b></div><div class="topbar-actions"><span class="local-pill"><span></span>LOCAL PROJECTS</span><button class="icon-button theme-toggle" type="button" data-action="theme" aria-label="Switch between light and dark theme">${SUN_ICON}${MOON_ICON}</button><a class="topbar-cta" href="/studio/import"><span aria-hidden="true">＋</span> New project</a></div></header><main class="studio-content" id="studio-content" tabindex="-1"></main></div></div>`;
+  root.innerHTML = `<div class="studio-shell veylune-glass-theme"><aside class="studio-sidebar"><a class="studio-brand" href="/studio/overview" aria-label="Veylune Studio home"><span class="brand-glyph">${voxelBloomSvg({ variant: "compact" })}</span><span><b>Veylune</b><small>STUDIO</small></span></a><div class="workspace-switch-wrap"><button class="workspace-switch" type="button" data-action="workspace-menu" aria-haspopup="true" aria-expanded="false"><span class="workspace-avatar">P</span><span><b>Personal workspace</b><small>Local library</small></span><span class="switch-chevron">⌄</span></button><div class="popover-menu" data-workspace-menu hidden role="menu"><p class="popover-note">Only one local workspace lives in this browser.</p><a role="menuitem" href="/studio/settings">Preferences</a></div></div><nav class="studio-nav" aria-label="Main navigation"><p class="nav-caption">WORKSPACE</p>${NAV.map((item) => `<a href="/studio/${item.route}" data-nav="${item.route}"><span class="nav-icon" aria-hidden="true">${item.icon}</span>${item.label}<span class="nav-active-mark"></span></a>`).join("")}<p class="nav-caption nav-caption-tools">TOOLS</p><a href="/studio/import" data-nav="import"><span class="nav-icon" aria-hidden="true">↥</span>Import images<span class="nav-active-mark"></span></a></nav><div class="sidebar-bottom"><a class="site-back-link" href="/" aria-label="Back to marketing site">← Veylune.com</a><div class="local-storage-note"><span class="storage-pulse"></span><span><b>Private by design</b><small>Files stay in this browser</small></span></div><div class="profile-button-wrap"><div class="popover-menu popover-menu-up" data-profile-menu hidden role="menu"><a role="menuitem" href="/studio/settings">Preferences</a><button role="menuitem" type="button" data-action="clear-data">Clear all local data</button></div><button class="profile-button" type="button" data-action="profile-menu" aria-haspopup="true" aria-expanded="false"><span class="profile-avatar">P</span><span><b>Personal</b><small>Local account</small></span><span class="switch-chevron">···</span></button></div></div></aside><div class="studio-main"><header class="studio-topbar"><a class="topbar-brand" href="/" aria-label="Back to Veylune site"><span class="brand-glyph">${voxelBloomSvg({ variant: "compact" })}</span><b>Veylune</b></a><div class="breadcrumbs"><span>Workspace</span><span class="breadcrumb-slash">/</span><b data-page-title>Overview</b></div><div class="topbar-actions"><span class="local-pill"><span></span>LOCAL PROJECTS</span><button class="icon-button theme-toggle" type="button" data-action="theme" aria-label="Switch between light and dark theme">${SUN_ICON}${MOON_ICON}</button><a class="topbar-cta" href="/studio/import"><span aria-hidden="true">＋</span> New project</a></div></header><main class="studio-content" id="studio-content" tabindex="-1"></main></div></div>`;
   const shell = root.querySelector<HTMLElement>(".studio-shell")!;
   const content = root.querySelector<HTMLElement>("#studio-content")!;
   const pageTitle = root.querySelector<HTMLElement>("[data-page-title]")!;
@@ -96,6 +102,8 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
     if (disposed) return;
     const token = ++routeToken;
     activeCapture?.dispose(); activeCapture = undefined;
+    activeBatchSession?.cancel(); activeBatchSession = undefined;
+    activeMapViewer?.dispose(); activeMapViewer = undefined;
     pendingSave?.dispose(); pendingSave = undefined;
     for (const url of activeAssetUrls) URL.revokeObjectURL(url);
     activeAssetUrls = [];
@@ -113,11 +121,25 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
   async function renderOverview(token: number): Promise<void> {
     const projects = await safeListProjects(); if (disposed || token !== routeToken) return;
     content.innerHTML = `<section class="welcome-row"><div><p class="overline">YOUR RECONSTRUCTION WORKSPACE</p><h1>Make something <span>real.</span></h1><p class="welcome-copy">Turn photos and camera scans into detailed 3D captures. Everything is processed and stored on this device.</p><div class="hero-actions"><a class="action-primary" href="/studio/import">＋ &nbsp; Import images</a><a class="action-secondary" href="/studio/capture">◎ &nbsp; Start a capture</a></div></div><div class="hero-visual" aria-hidden="true"><div class="hero-orbit orbit-one"></div><div class="hero-orbit orbit-two"></div><div class="hero-shape"><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="hero-coordinate coord-one">X <b>+02.481</b></div><div class="hero-coordinate coord-two">Y <b>−11.203</b></div><div class="hero-coordinate coord-three">Z <b>+04.782</b></div><div class="hero-visual-caption">SPATIAL ENGINE <span>READY</span></div></div></section><section class="quick-stats"><div><span class="stat-label">TOTAL PROJECTS</span><b>${projects.length.toString().padStart(2,"0")}</b><small>Saved on this device</small></div><div><span class="stat-label">SOURCE IMAGES</span><b>${projects.reduce((sum, project) => sum + project.assetIds.length, 0).toString().padStart(2,"0")}</b><small>Available to your projects</small></div><div><span class="stat-label">PROCESSING</span><b class="stat-local">LOCAL</b><small>No cloud uploads</small></div></section><section class="section-block"><div class="section-heading"><div><p class="overline">PICK UP WHERE YOU LEFT OFF</p><h2>Recent projects</h2></div><a class="text-link" href="/studio/projects">View all projects <span>↗</span></a></div>${projects.length ? projectGrid(projects.slice(0,3)) : emptyProjects()}</section><section class="workflow-strip"><div class="workflow-number">01</div><div><p class="overline">NEW TO VEYLUNE?</p><h3>From images to spatial insight</h3><p>Import a set of photos from your computer or capture a subject from multiple angles.</p></div><a href="/studio/import" class="workflow-link">Explore import workflow <span>→</span></a></section>`;
+    void loadThumbnailsIntoGrid(content, projects.slice(0, 3), token);
   }
 
   async function renderProjects(token: number): Promise<void> {
     const projects = await safeListProjects(); if (disposed || token !== routeToken) return;
     content.innerHTML = `<section class="page-intro"><div><p class="overline">YOUR LIBRARY</p><h1>Projects</h1><p>All of your source images and captures, stored privately on this device.</p></div><a class="action-primary" href="/studio/import">＋ &nbsp; New project</a></section>${projects.length ? projectGrid(projects) : emptyProjects()}`;
+    void loadThumbnailsIntoGrid(content, projects, token);
+  }
+
+  async function loadThumbnailsIntoGrid(container: HTMLElement, projects: readonly { id: string; assetIds: readonly string[] }[], token: number): Promise<void> {
+    await Promise.all(projects.map(async (project) => {
+      const url = await service.loadThumbnail(project).catch(() => undefined);
+      if (!url || disposed || token !== routeToken) return;
+      activeAssetUrls.push(url);
+      const img = container.querySelector<HTMLImageElement>(`[data-thumb="${CSS.escape(project.id)}"]`);
+      const orb = container.querySelector<HTMLElement>(`[data-thumb="${CSS.escape(project.id)}"]`)?.closest(".project-cover")?.querySelector<HTMLElement>("[data-cover-orb]");
+      if (img) { img.src = url; img.classList.add("project-thumb--loaded"); }
+      if (orb) orb.hidden = true;
+    }));
   }
 
   function renderImport(): void {
@@ -227,37 +249,136 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
   function renderSettings(): void {
     const APPEARANCE = [{ id: "light", name: "Light", detail: "Paper surfaces, dark text" }, { id: "dark", name: "Dark", detail: "Graphite surfaces, light text" }] as const;
     const active = currentTheme();
-    content.innerHTML = `<section class="page-intro"><div><p class="overline">MAKE IT YOUR SPACE</p><h1>Preferences</h1><p>Adjust the Studio’s appearance. Your choice is saved on this device and shared with the marketing site.</p></div></section><section class="settings-section"><div class="settings-heading"><div><h2>Appearance</h2><p>One glass theme, light or dark.</p></div><span class="settings-saved">Saved automatically</span></div><div class="theme-grid">${APPEARANCE.map((item) => `<button class="theme-option ${active === item.id ? "is-selected" : ""}" data-theme-option="${item.id}" type="button" aria-pressed="${active === item.id}"><span class="theme-preview theme-${item.id}"><i></i><i></i><i></i><b></b></span><span class="theme-copy"><b>${item.name}</b><small>${item.detail}</small></span><span class="theme-check" aria-hidden="true">✓</span></button>`).join("")}</div></section><section class="settings-section privacy-settings"><div class="settings-heading"><div><h2>Local-first storage</h2><p>Imported images and project records remain in this browser’s IndexedDB.</p></div></div><div class="storage-status"><span class="storage-pulse"></span><div><b>Browser storage enabled</b><small>Veylune does not send source images to a server.</small></div></div></section>`;
+    content.innerHTML = `<section class="page-intro"><div><p class="overline">MAKE IT YOUR SPACE</p><h1>Preferences</h1><p>Adjust the Studio’s appearance. Your choice is saved on this device and shared with the marketing site.</p></div></section><section class="settings-section"><div class="settings-heading"><div><h2>Appearance</h2><p>One glass theme, light or dark.</p></div><span class="settings-saved">Saved automatically</span></div><div class="theme-grid">${APPEARANCE.map((item) => `<button class="theme-option ${active === item.id ? "is-selected" : ""}" data-theme-option="${item.id}" type="button" aria-pressed="${active === item.id}"><span class="theme-preview theme-${item.id}"><i></i><i></i><i></i><b></b></span><span class="theme-copy"><b>${item.name}</b><small>${item.detail}</small></span><span class="theme-check" aria-hidden="true">✓</span></button>`).join("")}</div></section><section class="settings-section privacy-settings"><div class="settings-heading"><div><h2>Local-first storage</h2><p>Imported images and project records remain in this browser’s IndexedDB.</p></div></div><div class="storage-status"><span class="storage-pulse"></span><div><b>Browser storage enabled</b><small>Veylune does not send source images to a server.</small></div></div><div class="storage-quota" data-storage-quota><span class="quota-label">Storage used</span><span class="quota-value" data-quota-used>Checking...</span></div></section><section class="settings-section"><div class="settings-heading"><div><h2>Data management</h2><p>Permanently remove all projects and source images from this browser.</p></div></div><button class="action-danger" type="button" data-action="clear-data-settings" style="margin-top:14px">Clear all local data</button></section>`;
     content.querySelectorAll<HTMLButtonElement>("[data-theme-option]").forEach((button) => button.addEventListener("click", () => {
       const next = button.dataset.themeOption;
       if (next !== "light" && next !== "dark") return;
-      // Explicit pick, not a flip: clicking the option that already matches an
-      // implicit system-derived default still has to persist the choice.
       applyTheme(next);
       storeTheme(next);
       renderSettings();
     }));
+    const clearBtn = content.querySelector<HTMLButtonElement>("[data-action=’clear-data-settings’]");
+    clearBtn?.addEventListener("click", () => {
+      if (window.confirm("Delete every local project and its images? This cannot be undone.")) {
+        void service.clearAllProjects().then(() => { if (!disposed) { history.pushState(null, "", "/studio/overview"); void renderRoute(); } }).catch(() => { if (!disposed) window.alert("Could not clear local data."); });
+      }
+    });
+    if (navigator.storage?.estimate) {
+      void navigator.storage.estimate().then((estimate) => {
+        const usedEl = content.querySelector<HTMLElement>("[data-quota-used]"); if (!usedEl) return;
+        const used = estimate.usage ?? 0; const quota = estimate.quota ?? 0;
+        const pct = quota > 0 ? Math.round((used / quota) * 100) : null;
+        usedEl.textContent = quota > 0 ? `${formatBytes(used)} of ${formatBytes(quota)}${pct !== null ? ` (${pct}%)` : ""}` : formatBytes(used);
+      });
+    } else { const usedEl = content.querySelector<HTMLElement>("[data-quota-used]"); if (usedEl) usedEl.textContent = "Not available in this browser"; }
   }
 
   function renderCapture(): void {
-    content.innerHTML = `<section class="capture-route-heading"><div><p class="overline">LIVE RECONSTRUCTION</p><h1>Capture</h1><p>Move slowly around your subject. Refinement runs while you scan.</p></div><a href="/studio/projects" class="text-link">Back to projects <span>↗</span></a></section><div class="embedded-capture" data-capture-root></div>`;
-    activeCapture = mountCaptureApp(content.querySelector<HTMLElement>("[data-capture-root]")!, capabilities);
+    content.innerHTML = `<section class="capture-route-heading"><div><p class="overline">LIVE RECONSTRUCTION</p><h1>Capture</h1><p>Move slowly around your subject. Tap Snapshot to save frames.</p></div><a href="/studio/projects" class="text-link">Back to projects <span>↗</span></a></section><div class="embedded-capture" data-capture-root></div><div class="capture-save-bar" data-capture-save-bar hidden><p class="capture-save-message" data-capture-save-msg></p><div class="capture-save-actions"><input class="project-name-input capture-save-name" data-capture-save-name placeholder="Project name" maxlength="120"><button class="action-primary" type="button" data-action="save-capture">Save project →</button></div></div>`;
+    activeCapture = mountCaptureApp(content.querySelector<HTMLElement>("[data-capture-root]")!, capabilities, {}, {
+      onStopped(blobs) {
+        const bar = content.querySelector<HTMLElement>("[data-capture-save-bar]")!;
+        const msg = content.querySelector<HTMLElement>("[data-capture-save-msg]")!;
+        const nameInput = content.querySelector<HTMLInputElement>("[data-capture-save-name]")!;
+        bar.hidden = false;
+        msg.textContent = `${blobs.length} frame${blobs.length === 1 ? "" : "s"} captured. Name this project and save it.`;
+        nameInput.value = `Capture ${new Date().toLocaleDateString()}`;
+        const saveBtn = content.querySelector<HTMLButtonElement>("[data-action='save-capture']")!;
+        saveBtn.onclick = () => {
+          const name = nameInput.value.trim() || `Capture ${new Date().toLocaleDateString()}`;
+          const files = blobs.map((blob, i) => new File([blob], `frame-${String(i + 1).padStart(4, "0")}.jpg`, { type: "image/jpeg" }));
+          saveBtn.disabled = true; saveBtn.textContent = "Saving…"; msg.textContent = `Importing ${files.length} frame${files.length === 1 ? "" : "s"}…`;
+          const session = activeCapture?.session;
+          const ply = session && session.map.landmarks.length > 0 ? exportPointCloudPly(session.map, session.poses) : undefined;
+          void service.importImages(files, name, ply).then((project) => { navigate(`/studio/projects/${encodeURIComponent(project.id)}`); }).catch((err) => { msg.textContent = err instanceof Error ? err.message : "Could not save project."; saveBtn.disabled = false; saveBtn.textContent = "Save project →"; });
+        };
+      },
+    });
   }
 
   async function renderProject(projectId: string, token: number): Promise<void> {
     const project = await service.loadProject(projectId); if (disposed || token !== routeToken) return;
     if (!project) { content.innerHTML = `<div class="empty-state"><div class="empty-symbol">?</div><h1>Project not found</h1><p>This project may have been removed from this browser.</p><a class="action-primary" href="/studio/projects">Back to projects</a></div>`; return; }
+    const imageAssets = project.assets.filter((a) => !a.type.includes("ply") && !a.name.endsWith(".ply"));
+    const plyAsset = project.assets.find((a) => a.type.includes("ply") || a.name.endsWith(".ply"));
     activeAssetUrls = project.assets.map((asset) => asset.url);
-    content.innerHTML = `<section class="page-intro project-detail-intro"><div><a class="back-link" href="/studio/projects">← All projects</a><p class="overline">LOCAL PROJECT · ${new Date(project.createdAt).toLocaleDateString()}</p><h1>${escapeHTML(project.name)}</h1><p>${project.assets.length} source image${project.assets.length === 1 ? "" : "s"} · Stored on this device</p></div><a class="action-primary" href="/studio/capture">◎ &nbsp; Start a capture</a></section><section class="section-block asset-section"><div class="section-heading"><div><p class="overline">SOURCE MATERIAL</p><h2>Imported images</h2></div><span class="asset-count">${project.assets.length.toString().padStart(2,"0")} FILES</span></div><div class="asset-grid">${project.assets.map((asset) => `<figure class="asset-card"><img src="${asset.url}" alt="${escapeHTML(asset.name)}" loading="lazy"><figcaption><span>${escapeHTML(asset.name.split("/").pop() ?? asset.name)}</span><small>${formatBytes(asset.size)}</small></figcaption></figure>`).join("")}</div></section>`;
+    const plyBtnHtml = plyAsset ? `<a class="btn-subtle" href="${plyAsset.url}" download="${escapeHTML(project.name.replace(/\s+/g,"_"))}.ply">⬇ Download PLY</a>` : "";
+    content.innerHTML = `<section class="page-intro project-detail-intro"><div><a class="back-link" href="/studio/projects">← All projects</a><p class="overline">LOCAL PROJECT · ${new Date(project.createdAt).toLocaleDateString()}</p><div class="project-name-row"><h1 class="project-detail-name" data-project-name>${escapeHTML(project.name)}</h1><button class="icon-btn-subtle" type="button" data-action="rename-project" aria-label="Rename project" title="Rename">✎</button></div><p>${imageAssets.length} source image${imageAssets.length === 1 ? "" : "s"} · Stored on this device${plyAsset ? " · Point cloud saved" : ""}</p></div><div class="project-detail-actions">${imageAssets.length ? `<button class="action-primary" type="button" data-action="reconstruct">⬡ &nbsp; Reconstruct</button>` : `<a class="action-primary" href="/studio/capture">◎ &nbsp; Start a capture</a>`}${plyBtnHtml}<button class="action-danger" type="button" data-action="delete-project">Delete project</button></div></section><section class="recon-panel" data-recon-panel hidden><div class="recon-panel-inner"><div class="recon-map" data-recon-map></div><div class="recon-stats"><div class="recon-stat"><span class="recon-stat-label">Status</span><span class="recon-stat-value" data-recon-tracking>Waiting</span></div><div class="recon-stat"><span class="recon-stat-label">Keyframes</span><span class="recon-stat-value" data-recon-keyframes>0</span></div><div class="recon-stat"><span class="recon-stat-label">Points</span><span class="recon-stat-value" data-recon-points>0</span></div><div class="recon-stat"><span class="recon-stat-label">Progress</span><span class="recon-stat-value" data-recon-progress>0%</span></div></div><progress class="recon-progress-bar" data-recon-bar value="0" max="100"></progress><p class="recon-message" data-recon-message aria-live="polite"></p><button class="btn-subtle" type="button" data-action="cancel-recon">Cancel</button><button class="btn-subtle" type="button" data-action="download-recon-ply" hidden>⬇ Download PLY</button></div></section><section class="section-block asset-section"><div class="section-heading"><div><p class="overline">SOURCE MATERIAL</p><h2>Imported images</h2></div><span class="asset-count">${imageAssets.length.toString().padStart(2,"0")} FILES</span></div><div class="asset-grid">${imageAssets.map((asset) => `<figure class="asset-card"><img src="${asset.url}" alt="${escapeHTML(asset.name)}" loading="lazy"><figcaption><span>${escapeHTML(asset.name.split("/").pop() ?? asset.name)}</span><small>${formatBytes(asset.size)}</small></figcaption></figure>`).join("")}</div></section>`;
+
+    const reconPanel = content.querySelector<HTMLElement>("[data-recon-panel]")!;
+    const reconMapEl = content.querySelector<HTMLElement>("[data-recon-map]")!;
+    activeMapViewer = mountPointCloudViewer(reconMapEl);
+    const mapViewer = activeMapViewer;
+
+    const updateReconTelemetry = (state: CaptureTelemetry): void => {
+      const optimization = describeOptimization(state.optimization);
+      const statusLabel = state.tracking === "idle" ? "Done" : state.tracking === "lost" ? "Lost tracking" : state.tracking === "recovering" ? "Recovering" : "Processing";
+      content.querySelector<HTMLElement>("[data-recon-tracking]")!.textContent = statusLabel;
+      content.querySelector<HTMLElement>("[data-recon-keyframes]")!.textContent = String(state.keyframes);
+      content.querySelector<HTMLElement>("[data-recon-points]")!.textContent = String(state.landmarks);
+      content.querySelector<HTMLElement>("[data-recon-optimization]")!.textContent = state.optimization === "idle" && state.tracking !== "idle" ? "Building" : optimization.label;
+      const pct = Math.round(Math.max(0, Math.min(1, state.progress)) * 100);
+      content.querySelector<HTMLElement>("[data-recon-progress]")!.textContent = `${pct}%`;
+      const bar = content.querySelector<HTMLProgressElement>("[data-recon-bar]")!;
+      bar.value = pct;
+      const msg = optimization.message || (state.tracking === "lost" ? "Could not match features between images. Try adding more overlapping photos." : state.tracking === "idle" ? "Reconstruction complete." : "");
+      if (msg) content.querySelector<HTMLElement>("[data-recon-message]")!.textContent = msg;
+    };
+
+    content.querySelector<HTMLButtonElement>("[data-action='reconstruct']")?.addEventListener("click", () => void (async () => {
+      if (activeBatchSession) return;
+      reconPanel.hidden = false;
+      content.querySelector<HTMLElement>("[data-recon-message]")!.textContent = "Loading images…";
+      const imageData = await Promise.all(project.assets.map(async (a) => ({ data: await fetch(a.url).then((r) => r.arrayBuffer()), mediaType: a.type })));
+      if (disposed) return;
+      content.querySelector<HTMLElement>("[data-recon-message]")!.textContent = "Processing images…";
+      activeBatchSession = startBatchReconstruct(
+        imageData,
+        {
+          mapViewer,
+          onTelemetry(state) { if (!disposed) { updateReconTelemetry(state); if (state.tracking !== "idle") { const done = Math.round(state.progress * imageData.length); content.querySelector<HTMLElement>("[data-recon-message]")!.textContent = `Processing image ${done} of ${imageData.length}…`; } } },
+          onDone(session) {
+            if (disposed) return;
+            activeBatchSession = undefined;
+            content.querySelector<HTMLElement>("[data-recon-message]")!.textContent = `Reconstruction complete. ${session ? `${session.map.landmarks.length} points.` : ""}`;
+            if (session && session.map.landmarks.length > 0) {
+              const dlBtn = content.querySelector<HTMLButtonElement>("[data-action='download-recon-ply']")!;
+              dlBtn.hidden = false;
+              dlBtn.onclick = () => { const plyContent = exportPointCloudPly(session.map, session.poses); const blob = new Blob([plyContent], { type: "application/octet-stream" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `${project.name.replace(/\s+/g,"_")}.ply`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10_000); };
+              void service.attachPly(projectId, exportPointCloudPly(session.map, session.poses)).catch(() => {});
+            }
+          },
+          onError(msg) { if (!disposed) { content.querySelector<HTMLElement>("[data-recon-message]")!.textContent = `Error: ${msg}`; activeBatchSession = undefined; } },
+        },
+      );
+    })());
+    content.querySelector<HTMLButtonElement>("[data-action='cancel-recon']")?.addEventListener("click", () => {
+      activeBatchSession?.cancel(); activeBatchSession = undefined;
+      reconPanel.hidden = true;
+    });
+
+    content.querySelector('[data-action="delete-project"]')!.addEventListener("click", () => {
+      if (!window.confirm(`Delete "${project.name}"? This removes all ${project.assets.length} source image${project.assets.length === 1 ? "" : "s"} from this device. This cannot be undone.`)) return;
+      activeBatchSession?.cancel();
+      void service.deleteProject(projectId).then(() => { if (!disposed) navigate("/studio/projects"); }).catch(() => { if (!disposed) window.alert("Could not delete the project. Try again."); });
+    });
+    content.querySelector('[data-action="rename-project"]')!.addEventListener("click", () => {
+      const nameEl = content.querySelector<HTMLElement>("[data-project-name]")!;
+      const current = nameEl.textContent ?? "";
+      const next = window.prompt("Rename project:", current);
+      if (!next || next.trim() === current) return;
+      const trimmed = next.trim().slice(0, 120);
+      void service.renameProject(projectId, trimmed).then(() => { if (!disposed) nameEl.textContent = trimmed; }).catch(() => { if (!disposed) window.alert("Could not rename the project."); });
+    });
   }
 
   async function safeListProjects() { try { return await service.listProjects(); } catch { return []; } }
-  function dispose(): void { if (disposed) return; disposed = true; pendingSave?.dispose(); pendingSave = undefined; activeCapture?.dispose(); activeAssetUrls.forEach(URL.revokeObjectURL); window.removeEventListener("popstate", routeHandler); document.removeEventListener("click", onOutsideClick); document.removeEventListener("keydown", onEscapeKey); }
+  function dispose(): void { if (disposed) return; disposed = true; pendingSave?.dispose(); pendingSave = undefined; activeCapture?.dispose(); activeBatchSession?.cancel(); activeMapViewer?.dispose(); activeAssetUrls.forEach(URL.revokeObjectURL); window.removeEventListener("popstate", routeHandler); document.removeEventListener("click", onOutsideClick); document.removeEventListener("keydown", onEscapeKey); }
   return { dispose };
 }
 
 function parseRoute(pathname: string): { page: Page; projectId: string } { const [first, second] = pathname.replace(/^\/studio\/?/, "").split("/"); if (first === "projects" && second) return { page: "project", projectId: decodeURIComponent(second) }; if (first === "projects" || first === "import" || first === "capture" || first === "settings") return { page: first, projectId: "" }; return { page: "overview", projectId: "" }; }
-function projectGrid(projects: readonly { id: string; name: string; createdAt: string; updatedAt: string; assetIds: readonly string[] }[]): string { return `<div class="project-grid">${projects.map((project,index) => `<a class="project-card" href="/studio/projects/${encodeURIComponent(project.id)}"><div class="project-cover cover-${index % 3}"><div class="cover-orb"></div><span class="cover-label">${project.assetIds.length ? `${project.assetIds.length} SOURCE IMAGES` : "CAMERA CAPTURE"}</span><span class="cover-index">${String(index + 1).padStart(2,"0")}</span></div><div class="project-card-info"><div><h3>${escapeHTML(project.name)}</h3><p>Updated ${escapeHTML(new Date(project.updatedAt).toLocaleDateString())}</p></div><span class="project-arrow">↗</span></div></a>`).join("")}</div>`; }
+function projectGrid(projects: readonly { id: string; name: string; createdAt: string; updatedAt: string; assetIds: readonly string[] }[]): string { return `<div class="project-grid">${projects.map((project,index) => `<a class="project-card" href="/studio/projects/${encodeURIComponent(project.id)}" data-card-id="${escapeHTML(project.id)}"><div class="project-cover cover-${index % 3}"><div class="cover-orb" data-cover-orb></div><img class="project-thumb" data-thumb="${escapeHTML(project.id)}" aria-hidden="true" alt=""><span class="cover-label">${project.assetIds.length ? `${project.assetIds.length} SOURCE IMAGES` : "CAMERA CAPTURE"}</span><span class="cover-index">${String(index + 1).padStart(2,"0")}</span></div><div class="project-card-info"><div><h3>${escapeHTML(project.name)}</h3><p>Updated ${escapeHTML(new Date(project.updatedAt).toLocaleDateString())}</p></div><span class="project-arrow">↗</span></div></a>`).join("")}</div>`; }
 function emptyProjects(): string { return `<div class="empty-state"><div class="empty-symbol">＋</div><h2>Your first project starts here</h2><p>Import a photo set from your computer or start a live camera capture.</p><div class="empty-actions"><a href="/studio/import" class="action-primary">Import images</a><a href="/studio/capture" class="action-secondary">Start a capture</a></div></div>`; }
 function inferName(files: readonly File[]): string { const first = files[0]!; const folder = (first as File & { webkitRelativePath?: string }).webkitRelativePath?.split("/")[0]; return folder || first.name.replace(/\.[^.]+$/, "") || "Imported project"; }
 function escapeHTML(value: string): string { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!); }
