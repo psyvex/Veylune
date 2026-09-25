@@ -127,6 +127,77 @@ describe("Import quality scan", () => {
   });
 });
 
+describe("Workspace and profile menus", () => {
+  it("opens the workspace menu and closes it again on an outside click", async () => {
+    const root = document.createElement("div");
+    document.body.append(root);
+    dispose = mountStudioApp(root, capabilities).dispose;
+    await settle();
+
+    const trigger = root.querySelector<HTMLButtonElement>('[data-action="workspace-menu"]')!;
+    const menu = root.querySelector<HTMLElement>("[data-workspace-menu]")!;
+    expect(menu.hidden).toBe(true);
+
+    trigger.click();
+    expect(menu.hidden).toBe(false);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+
+    document.body.click();
+    expect(menu.hidden).toBe(true);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("opening the profile menu closes an already-open workspace menu", async () => {
+    const root = document.createElement("div");
+    document.body.append(root);
+    dispose = mountStudioApp(root, capabilities).dispose;
+    await settle();
+
+    root.querySelector<HTMLButtonElement>('[data-action="workspace-menu"]')!.click();
+    root.querySelector<HTMLButtonElement>('[data-action="profile-menu"]')!.click();
+
+    expect(root.querySelector<HTMLElement>("[data-workspace-menu]")?.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>("[data-profile-menu]")?.hidden).toBe(false);
+  });
+
+  it("asks for confirmation before clearing local data, and reports failure when storage is unavailable", async () => {
+    // jsdom in this suite has no indexedDB (see storage/indexeddb.test.ts's own
+    // scope), so this exercises clearAllProjects()'s real failure path here; the
+    // success path (actually deleting every project) is covered directly against
+    // an in-memory store in project-service.test.ts.
+    const root = document.createElement("div");
+    document.body.append(root);
+    dispose = mountStudioApp(root, capabilities).dispose;
+    navigateTo("/studio/projects");
+    await settle();
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+    root.querySelector<HTMLButtonElement>('[data-action="profile-menu"]')!.click();
+    root.querySelector<HTMLButtonElement>('[data-action="clear-data"]')!.click();
+    await settle();
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalled();
+    expect(root.querySelector<HTMLElement>("[data-profile-menu]")?.hidden).toBe(true);
+  });
+
+  it("does nothing if the clear-data confirmation is declined", async () => {
+    const root = document.createElement("div");
+    document.body.append(root);
+    dispose = mountStudioApp(root, capabilities).dispose;
+    navigateTo("/studio/projects");
+    await settle();
+
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    root.querySelector<HTMLButtonElement>('[data-action="profile-menu"]')!.click();
+    root.querySelector<HTMLButtonElement>('[data-action="clear-data"]')!.click();
+    await settle();
+
+    expect(location.pathname).toBe("/studio/projects");
+  });
+});
+
 describe("Studio identity", () => {
   it("carries the same mark as the marketing page, in the theme's own colour", async () => {
     const root = document.createElement("div");

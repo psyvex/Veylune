@@ -12,6 +12,18 @@ export class StudioProjectService {
 
   listProjects(): Promise<readonly StudioProjectRecord[]> { return this.store.listProjects(); }
 
+  /** Deletes one project and everything stored for it (source images, revision
+   * history, any saved reconstruction session) in a single store transaction. */
+  deleteProject(projectId: string): Promise<void> { return this.store.deleteProject(projectId); }
+
+  /** Deletes every project on this device. Used by the "Clear all local data"
+   * action in Preferences; the caller is responsible for confirming with the
+   * user first, since this cannot be undone. */
+  async clearAllProjects(): Promise<void> {
+    const projects = await this.store.listProjects();
+    for (const project of projects) await this.store.deleteProject(project.id);
+  }
+
   async loadProject(projectId: string): Promise<ProjectWithAssets | undefined> {
     const project = (await this.store.listProjects()).find((candidate) => candidate.id === projectId);
     if (!project) return undefined;

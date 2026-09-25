@@ -89,7 +89,26 @@ a { color: inherit; text-decoration: none; }
 .brand-glyph { flex: none; width: 30px; height: 30px; color: var(--accent); }
 .studio-brand b, .workspace-switch b, .profile-button b { display: block; font-size: 13px; letter-spacing: -.02em; }
 .studio-brand small { display: block; color: var(--subtle); font-size: 8px; letter-spacing: .2em; margin-top: 3px; }
-.workspace-switch { margin: 34px 0 26px; padding: 10px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 9px; background: color-mix(in srgb, var(--surface) 72%, transparent); }
+.workspace-switch-wrap { position: relative; margin: 34px 0 26px; }
+.workspace-switch { width: 100%; padding: 10px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 9px; background: color-mix(in srgb, var(--surface) 72%, transparent); color: inherit; text-align: left; font: inherit; cursor: pointer; transition: border-color 160ms ease, background 160ms ease; }
+.workspace-switch:hover, .profile-button:hover { border-color: var(--line-strong); }
+.workspace-switch[aria-expanded="true"] .switch-chevron { transform: rotate(180deg); }
+.switch-chevron { display: inline-block; transition: transform 160ms ease; }
+.profile-button-wrap { position: relative; margin-top: 14px; }
+/* [hidden] first: a plain class selector's `display` beats the UA [hidden]{display:none}
+   rule by cascade origin regardless of source order, so .popover-menu's own `display: grid`
+   has to be paired with an explicit [hidden] override or the hidden attribute does nothing. */
+.popover-menu[hidden] { display: none; }
+/* A near-opaque fill rather than the shared --surface-raised glass token: this is a
+   small critical control sitting directly over other sidebar text, so it needs to read
+   as solid at a glance rather than as another translucent layer in the stack. */
+.popover-menu { position: absolute; z-index: 30; left: 0; right: 0; bottom: auto; top: calc(100% + 8px); display: grid; padding: 6px; border: 1px solid var(--line-strong); border-radius: 10px; background: rgb(var(--glass-tint) / 0.98); backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%); -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%); box-shadow: var(--shadow-lg, 0 24px 56px #000a); animation: popover-in 140ms cubic-bezier(.2,.7,.2,1) both; }
+.popover-menu-up { top: auto; bottom: calc(100% + 8px); }
+.popover-menu a, .popover-menu button { display: block; width: 100%; padding: 9px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--text); text-align: left; font-size: 11px; font: inherit; cursor: pointer; transition: background 140ms ease; }
+.popover-menu a:hover, .popover-menu button:hover { background: var(--surface-hover); }
+.popover-menu button[data-action="clear-data"] { color: #ed8079; }
+.popover-note { margin: 2px 6px 6px; padding-bottom: 6px; border-bottom: 1px solid var(--line); color: var(--subtle); font-size: 9px; line-height: 1.5; }
+@keyframes popover-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 .workspace-avatar, .profile-avatar { display: grid; place-items: center; width: 30px; height: 30px; flex: 0 0 auto; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; }
 .workspace-switch small, .profile-button small { display: block; color: var(--muted); font-size: 10px; margin-top: 4px; }
 .switch-chevron { margin-left: auto; color: var(--subtle); font-size: 14px; }
@@ -109,7 +128,7 @@ a { color: inherit; text-decoration: none; }
 .local-storage-note b { display: block; font-size: 10px; font-weight: 600; }
 .local-storage-note small { display: block; margin-top: 4px; color: var(--subtle); font-size: 9px; }
 .storage-pulse, .storage-status > span { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 14%, transparent); animation: status-breathe 2.8s ease-in-out infinite; }
-.profile-button { display: flex; align-items: center; width: 100%; margin-top: 14px; padding: 7px 10px; text-align: left; color: var(--text); background: transparent; border: 0; border-radius: 8px; cursor: pointer; }
+.profile-button { display: flex; align-items: center; width: 100%; padding: 7px 10px; text-align: left; color: var(--text); background: transparent; border: 0; border-radius: 8px; cursor: pointer; }
 .profile-button:hover { background: var(--surface-hover); }
 .profile-avatar { background: #333a31; color: var(--text); }
 

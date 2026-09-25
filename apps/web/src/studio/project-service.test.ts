@@ -43,4 +43,32 @@ describe("StudioProjectService", () => {
     expect(store.projects.has("project-2")).toBe(false);
     expect(store.artifacts.size).toBe(0);
   });
+
+  it("deleteProject removes just that project's data", async () => {
+    const store = new MemoryProjectStore();
+    const service = new StudioProjectService(store, () => new Date("2026-02-03T04:05:06.000Z"), () => "project-3");
+    const kept = await new StudioProjectService(store, () => new Date(), () => "project-keep").importImages(
+      [new File([new Uint8Array([9])], "kept.png", { type: "image/png" })], "Kept",
+    );
+    const target = await service.importImages([new File([new Uint8Array([1])], "a.png", { type: "image/png" })], "Target");
+
+    await service.deleteProject(target.id);
+
+    expect(store.projects.has(target.id)).toBe(false);
+    expect(store.projects.has(kept.id)).toBe(true);
+  });
+
+  it("clearAllProjects removes every project on this device", async () => {
+    const store = new MemoryProjectStore();
+    const service = new StudioProjectService(store, () => new Date("2026-02-03T04:05:06.000Z"), () => "project-4");
+    await service.importImages([new File([new Uint8Array([1])], "a.png", { type: "image/png" })], "One");
+    await new StudioProjectService(store, () => new Date(), () => "project-5").importImages(
+      [new File([new Uint8Array([2])], "b.png", { type: "image/png" })], "Two",
+    );
+    expect(store.projects.size).toBe(2);
+
+    await service.clearAllProjects();
+
+    expect(store.projects.size).toBe(0);
+  });
 });

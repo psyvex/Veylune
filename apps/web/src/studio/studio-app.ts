@@ -27,7 +27,7 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
   // the previous route settled, not just a test-timing artifact.
   let routeToken = 0;
   let theme = readTheme();
-  root.innerHTML = `<div class="studio-shell veylune-glass-theme" data-accent="${theme}"><aside class="studio-sidebar"><a class="studio-brand" href="/studio/overview" aria-label="Veylune Studio home"><span class="brand-glyph">${voxelBloomSvg({ variant: "compact" })}</span><span><b>Veylune</b><small>STUDIO</small></span></a><div class="workspace-switch"><span class="workspace-avatar">P</span><span><b>Personal workspace</b><small>Local library</small></span><span class="switch-chevron">⌄</span></div><nav class="studio-nav" aria-label="Main navigation"><p class="nav-caption">WORKSPACE</p>${NAV.map((item) => `<a href="/studio/${item.route}" data-nav="${item.route}"><span class="nav-icon" aria-hidden="true">${item.icon}</span>${item.label}<span class="nav-active-mark"></span></a>`).join("")}<p class="nav-caption nav-caption-tools">TOOLS</p><a href="/studio/import" data-nav="import"><span class="nav-icon" aria-hidden="true">↥</span>Import images<span class="nav-active-mark"></span></a></nav><div class="sidebar-bottom"><div class="local-storage-note"><span class="storage-pulse"></span><span><b>Private by design</b><small>Files stay in this browser</small></span></div><button class="profile-button" type="button"><span class="profile-avatar">P</span><span><b>Personal</b><small>Local account</small></span><span class="switch-chevron">···</span></button></div></aside><div class="studio-main"><header class="studio-topbar"><div class="breadcrumbs"><span>Workspace</span><span class="breadcrumb-slash">/</span><b data-page-title>Overview</b></div><div class="topbar-actions"><span class="local-pill"><span></span>LOCAL PROJECTS</span><button class="icon-button" type="button" data-action="theme" aria-label="Open appearance settings">◐</button><a class="topbar-cta" href="/studio/import"><span aria-hidden="true">＋</span> New project</a></div></header><main class="studio-content" id="studio-content" tabindex="-1"></main></div></div>`;
+  root.innerHTML = `<div class="studio-shell veylune-glass-theme" data-accent="${theme}"><aside class="studio-sidebar"><a class="studio-brand" href="/studio/overview" aria-label="Veylune Studio home"><span class="brand-glyph">${voxelBloomSvg({ variant: "compact" })}</span><span><b>Veylune</b><small>STUDIO</small></span></a><div class="workspace-switch-wrap"><button class="workspace-switch" type="button" data-action="workspace-menu" aria-haspopup="true" aria-expanded="false"><span class="workspace-avatar">P</span><span><b>Personal workspace</b><small>Local library</small></span><span class="switch-chevron">⌄</span></button><div class="popover-menu" data-workspace-menu hidden role="menu"><p class="popover-note">Only one local workspace lives in this browser.</p><a role="menuitem" href="/studio/settings">Preferences</a></div></div><nav class="studio-nav" aria-label="Main navigation"><p class="nav-caption">WORKSPACE</p>${NAV.map((item) => `<a href="/studio/${item.route}" data-nav="${item.route}"><span class="nav-icon" aria-hidden="true">${item.icon}</span>${item.label}<span class="nav-active-mark"></span></a>`).join("")}<p class="nav-caption nav-caption-tools">TOOLS</p><a href="/studio/import" data-nav="import"><span class="nav-icon" aria-hidden="true">↥</span>Import images<span class="nav-active-mark"></span></a></nav><div class="sidebar-bottom"><div class="local-storage-note"><span class="storage-pulse"></span><span><b>Private by design</b><small>Files stay in this browser</small></span></div><div class="profile-button-wrap"><div class="popover-menu popover-menu-up" data-profile-menu hidden role="menu"><a role="menuitem" href="/studio/settings">Preferences</a><button role="menuitem" type="button" data-action="clear-data">Clear all local data</button></div><button class="profile-button" type="button" data-action="profile-menu" aria-haspopup="true" aria-expanded="false"><span class="profile-avatar">P</span><span><b>Personal</b><small>Local account</small></span><span class="switch-chevron">···</span></button></div></div></aside><div class="studio-main"><header class="studio-topbar"><div class="breadcrumbs"><span>Workspace</span><span class="breadcrumb-slash">/</span><b data-page-title>Overview</b></div><div class="topbar-actions"><span class="local-pill"><span></span>LOCAL PROJECTS</span><button class="icon-button" type="button" data-action="theme" aria-label="Open appearance settings">◐</button><a class="topbar-cta" href="/studio/import"><span aria-hidden="true">＋</span> New project</a></div></header><main class="studio-content" id="studio-content" tabindex="-1"></main></div></div>`;
   const shell = root.querySelector<HTMLElement>(".studio-shell")!;
   const content = root.querySelector<HTMLElement>("#studio-content")!;
   // Glacier is the one accent that reads as a light theme; the other two stay
@@ -41,13 +41,46 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
    * address bar always reads as a normal path — /studio/projects/abc, not
    * /studio#/project/abc. Browser back/forward still works via `popstate`. */
   const navigate = (path: string): void => { if (`${location.pathname}${location.search}` === path) return; history.pushState(null, "", path); void renderRoute(); };
+  const workspaceMenu = root.querySelector<HTMLElement>("[data-workspace-menu]")!;
+  const profileMenu = root.querySelector<HTMLElement>("[data-profile-menu]")!;
+  const closePopovers = (): void => {
+    for (const [menu, action] of [[workspaceMenu, "workspace-menu"], [profileMenu, "profile-menu"]] as const) {
+      menu.hidden = true;
+      root.querySelector(`[data-action="${action}"]`)?.setAttribute("aria-expanded", "false");
+    }
+  };
+  const togglePopover = (menu: HTMLElement, trigger: Element): void => {
+    const opening = menu.hidden;
+    closePopovers();
+    menu.hidden = !opening;
+    trigger.setAttribute("aria-expanded", String(opening));
+  };
   root.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
-    if (target.closest('[data-action="theme"]')) { navigate("/studio/settings"); return; }
+    if (target.closest('[data-action="theme"]')) { closePopovers(); navigate("/studio/settings"); return; }
+    const workspaceTrigger = target.closest('[data-action="workspace-menu"]');
+    if (workspaceTrigger) { togglePopover(workspaceMenu, workspaceTrigger); return; }
+    const profileTrigger = target.closest('[data-action="profile-menu"]');
+    if (profileTrigger) { togglePopover(profileMenu, profileTrigger); return; }
+    if (target.closest('[data-action="clear-data"]')) {
+      closePopovers();
+      if (window.confirm("Delete every local project and its images? This cannot be undone.")) {
+        void service.clearAllProjects().then(() => {
+          if (disposed) return;
+          // Always land on Overview and force a render even if that's already the
+          // current path: the page just cleared out from under whatever route was
+          // showing (a project detail page in particular would now be gone).
+          history.pushState(null, "", "/studio/overview");
+          void renderRoute();
+        }).catch(() => { if (!disposed) window.alert("Could not clear local data. Local storage may be unavailable in this browser."); });
+      }
+      return;
+    }
     // Same-tab left-click on an internal /studio link: take it over client-side
     // instead of letting the browser do a full navigation/reload.
     const link = target.closest("a");
+    if (link) closePopovers();
     if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     if (link.target && link.target !== "_self") return;
     const url = new URL(link.href, location.href);
@@ -55,6 +88,10 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
     event.preventDefault();
     navigate(`${url.pathname}${url.search}`);
   });
+  const onOutsideClick = (event: MouseEvent): void => { if (!(event.target instanceof Node) || root.contains(event.target)) return; closePopovers(); };
+  const onEscapeKey = (event: KeyboardEvent): void => { if (event.key === "Escape") closePopovers(); };
+  document.addEventListener("click", onOutsideClick);
+  document.addEventListener("keydown", onEscapeKey);
   window.addEventListener("popstate", routeHandler);
   void renderRoute();
 
@@ -208,7 +245,7 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
   }
 
   async function safeListProjects() { try { return await service.listProjects(); } catch { return []; } }
-  function dispose(): void { if (disposed) return; disposed = true; pendingSave?.dispose(); pendingSave = undefined; activeCapture?.dispose(); activeAssetUrls.forEach(URL.revokeObjectURL); window.removeEventListener("popstate", routeHandler); }
+  function dispose(): void { if (disposed) return; disposed = true; pendingSave?.dispose(); pendingSave = undefined; activeCapture?.dispose(); activeAssetUrls.forEach(URL.revokeObjectURL); window.removeEventListener("popstate", routeHandler); document.removeEventListener("click", onOutsideClick); document.removeEventListener("keydown", onEscapeKey); }
   return { dispose };
 }
 
