@@ -56,21 +56,32 @@ describe("Studio navigation and appearance", () => {
 
     navigateTo("/studio/settings");
     await settle();
-    expect(root.querySelectorAll("[data-theme-option]")).toHaveLength(3);
+    expect(root.querySelectorAll("[data-theme-option]")).toHaveLength(2);
   });
 
-  it("applies and persists a selected visual theme", async () => {
+  it("applies and persists a selected appearance, shared with the rest of the app", async () => {
     const root = document.createElement("div");
     document.body.append(root);
     dispose = mountStudioApp(root, capabilities).dispose;
     navigateTo("/studio/settings");
     await settle();
 
-    root.querySelector<HTMLButtonElement>('[data-theme-option="glacier"]')?.click();
-    expect(root.querySelector(".studio-shell")?.getAttribute("data-accent")).toBe("glacier");
+    root.querySelector<HTMLButtonElement>('[data-theme-option="light"]')?.click();
     expect(document.documentElement.getAttribute("data-theme")).toBe("light");
-    expect(localStorage.getItem("veylune-theme")).toBe("glacier");
-    expect(root.querySelector('[data-theme-option="glacier"]')?.getAttribute("aria-pressed")).toBe("true");
+    expect(localStorage.getItem("veylune-theme")).toBe("light");
+    expect(root.querySelector('[data-theme-option="light"]')?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("the topbar toggle flips light/dark directly, matching the marketing page's control", async () => {
+    const root = document.createElement("div");
+    document.body.append(root);
+    dispose = mountStudioApp(root, capabilities).dispose;
+    await settle();
+    document.documentElement.setAttribute("data-theme", "dark");
+
+    root.querySelector<HTMLButtonElement>('[data-action="theme"]')!.click();
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+    expect(localStorage.getItem("veylune-theme")).toBe("light");
   });
 });
 

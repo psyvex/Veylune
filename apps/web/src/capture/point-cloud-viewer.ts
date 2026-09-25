@@ -10,7 +10,7 @@ export interface PointCloudViewer {
   readonly available: boolean;
 }
 
-const POINT_COLOR = 0xd5f36a;
+const POINT_COLOR = 0x586fee; // matches --accent in design/tokens.css
 const CAMERA_COLOR = 0x8fbcff;
 const FRUSTUM_SIZE = 0.06;
 

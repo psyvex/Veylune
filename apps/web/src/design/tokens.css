@@ -4,7 +4,7 @@
  * task 7). Every surface, accent, radius, blur, and spacing value the app
  * paints with lives here as a variable; page-level CSS reads through var()
  * rather than declaring its own hex or pixel value, so a single attribute
- * flip (`data-theme` and `data-accent` on <html>) repaints everything.
+ * flip (`data-theme` on <html>) repaints everything.
  *
  * The visual language is a frosted glass surface system, in the spirit of
  * iOS/macOS materials: translucent panels over a blurred, saturated
@@ -13,9 +13,10 @@
  * the app is built from the same handful of --glass-* tokens below rather
  * than each screen inventing its own translucency.
  *
- * Themes are light/dark (system-driven by default, overridable with
- * data-theme="light" or "dark"), and an accent choice (data-accent) tints
- * the same glass system rather than swapping it for a different design.
+ * One theme, light or dark (system-driven by default, overridable with
+ * data-theme="light" or "dark" — see design/theme-preference.ts, the single
+ * module every surface reads/writes that choice through), and one signature
+ * accent rather than a per-surface palette.
  */
 
 :root {
@@ -72,12 +73,16 @@
   --control-height: 44px;
   --control-height-sm: 36px;
 
-  /* --- Accent: signature (default) ---------------------------------------- */
-  --accent-h: 84;
-  --accent-s: 68%;
-  --accent-l: 66%;
+  /* --- Accent -----------------------------------------------------------
+     One signature accent for the whole app: a restrained indigo-blue rather
+     than a saturated "AI tool" neon, in the register of Linear/Vercel/Arc.
+     Every surface reads it through these variables rather than a literal
+     hex, so this is the only place the hue lives. */
+  --accent-h: 231;
+  --accent-s: 82%;
+  --accent-l: 64%;
   --accent: hsl(var(--accent-h) var(--accent-s) var(--accent-l));
-  --accent-ink: #141a0c;
+  --accent-ink: #ffffff;
   --accent-strong: hsl(var(--accent-h) var(--accent-s) calc(var(--accent-l) - 16%));
 
   /* --- Light theme surfaces ------------------------------------------------
@@ -109,7 +114,6 @@
     --glass-alpha: 0.75;
     --glass-alpha-strong: 0.9;
     --shadow-color: 0 0 0;
-    --accent-ink: #0f1408;
   }
 }
 
@@ -125,7 +129,6 @@
   --glass-alpha: 0.75;
   --glass-alpha-strong: 0.9;
   --shadow-color: 0 0 0;
-  --accent-ink: #0f1408;
 }
 :root[data-theme="light"] {
   --bg: #f4f3ee;
@@ -138,24 +141,6 @@
   --glass-alpha: 0.8;
   --glass-alpha-strong: 0.93;
   --shadow-color: 28 33 27;
-  --accent-ink: #141a0c;
-}
-
-/* --- Accent variants ------------------------------------------------------
-   Three accent choices tint the same glass system rather than swapping it
-   for a different surface treatment, so switching accent in Preferences
-   never changes anything but the highlight colour. */
-:root[data-accent="glacier"] {
-  --accent-h: 213;
-  --accent-s: 62%;
-  --accent-l: 56%;
-  --accent-ink: #ffffff;
-}
-:root[data-accent="moss"] {
-  --accent-h: 103;
-  --accent-s: 34%;
-  --accent-l: 62%;
-  --accent-ink: #12190d;
 }
 
 /* Every surface opts in explicitly with this class, so tokens never leak

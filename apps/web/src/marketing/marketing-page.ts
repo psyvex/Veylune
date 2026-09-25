@@ -20,6 +20,7 @@
 import { mountVoxelObject } from "../branding/voxel-object";
 import { voxelBloomSvg } from "../branding/voxel-bloom";
 import { formatPoseReadout, INITIAL_POSE, mountSpatialScene } from "./spatial-scene";
+import { initTheme, MOON_ICON, SUN_ICON, toggleTheme } from "../design/theme-preference";
 
 // ---------------------------------------------------------------------------------------
 // Static content & config
@@ -57,38 +58,6 @@ const SCENE_ANNOTATIONS = `
         <div class="hero-note note-pose"><span>POSE GRAPH</span><b>8 views linked</b><i class="note-rule"></i></div>
         <div class="hero-note note-coverage"><span>COVERAGE</span><b>72%</b><i class="note-meter"><i></i></i></div>
       </div>`;
-
-// ---------------------------------------------------------------------------------------
-// Theme (light/dark)
-// ---------------------------------------------------------------------------------------
-
-/** Storage key for the reader's explicit theme choice. Absent until they pick one. */
-const THEME_STORAGE_KEY = "veylune-theme";
-type Theme = "light" | "dark";
-
-/**
- * The system preference, read once. Only consulted when the reader has never chosen —
- * a stored choice always wins, on this visit and every one after, until they change it.
- */
-const systemTheme = (): Theme => (window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-
-const readStoredTheme = (): Theme | undefined => {
-  try {
-    const stored = window.localStorage?.getItem(THEME_STORAGE_KEY);
-    return stored === "light" || stored === "dark" ? stored : undefined;
-  } catch {
-    // Private browsing / storage disabled: fall through to the system preference, silently.
-    return undefined;
-  }
-};
-
-/** `data-theme` lives on `<html>`, not the mounted root, so it survives a remount. */
-const applyTheme = (theme: Theme): void => {
-  document.documentElement.setAttribute("data-theme", theme);
-};
-
-const SUN_ICON = `<svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"></circle><path d="M12 2.5v2.6M12 18.9v2.6M4.6 4.6l1.9 1.9M17.5 17.5l1.9 1.9M2.5 12h2.6M18.9 12h2.6M4.6 19.4l1.9-1.9M17.5 6.5l1.9-1.9"></path></svg>`;
-const MOON_ICON = `<svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.2A8.4 8.4 0 1 1 9.8 4a6.7 6.7 0 0 0 10.2 10.2Z"></path></svg>`;
 
 // ---------------------------------------------------------------------------------------
 // Common components
@@ -207,7 +176,7 @@ function renderFooter(): string {
 export function mountMarketingPage(root: HTMLElement): { dispose(): void } {
   // Applied before the first paint of this mount: a stored choice persists across visits,
   // otherwise the page opens on whatever the OS/browser already prefers.
-  applyTheme(readStoredTheme() ?? systemTheme());
+  initTheme();
 
   root.innerHTML = `<div class="marketing-shell veylune-glass-theme">
     ${renderHeader()}
@@ -225,11 +194,7 @@ export function mountMarketingPage(root: HTMLElement): { dispose(): void } {
 
   // --- Theme toggle ----------------------------------------------------------------
   const themeToggle = root.querySelector<HTMLButtonElement>(".theme-toggle")!;
-  const onThemeToggleClick = (): void => {
-    const next: Theme = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
-    applyTheme(next);
-    try { window.localStorage?.setItem(THEME_STORAGE_KEY, next); } catch { /* private browsing: the choice just won't outlive this tab */ }
-  };
+  const onThemeToggleClick = (): void => { toggleTheme(); };
   themeToggle.addEventListener("click", onThemeToggleClick);
 
   // --- Mobile nav --------------------------------------------------------------------
