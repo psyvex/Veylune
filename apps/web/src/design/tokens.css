@@ -1,0 +1,184 @@
+/**
+ * Veylune design tokens: one glass theme, shared by the marketing page, the
+ * Studio shell, and the capture HUD (see docs/75-production-task-pipeline.md
+ * task 7). Every surface, accent, radius, blur, and spacing value the app
+ * paints with lives here as a variable; page-level CSS reads through var()
+ * rather than declaring its own hex or pixel value, so a single attribute
+ * flip (`data-theme` and `data-accent` on <html>) repaints everything.
+ *
+ * The visual language is a frosted glass surface system, in the spirit of
+ * iOS/macOS materials: translucent panels over a blurred, saturated
+ * background, a thin hairline border, a soft outer shadow, and a bright
+ * inset highlight along the top edge that reads as a bevel. Every panel in
+ * the app is built from the same handful of --glass-* tokens below rather
+ * than each screen inventing its own translucency.
+ *
+ * Themes are light/dark (system-driven by default, overridable with
+ * data-theme="light" or "dark"), and an accent choice (data-accent) tints
+ * the same glass system rather than swapping it for a different design.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* --- Type scale -------------------------------------------------------- */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --font-serif: Georgia, "Times New Roman", serif;
+
+  /* --- Spacing scale (4px base) ------------------------------------------ */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* --- Radius scale -------------------------------------------------------
+     iOS-style continuous corners read rounder than a plain border-radius at
+     the same value; the app approximates that with a slightly larger radius
+     rather than a superellipse clip-path, which is not universally supported
+     and is not worth the layout cost on animated panels. */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  /* --- Motion -------------------------------------------------------------
+     One easing curve, reused everywhere something enters, presses, or
+     settles, so the whole app moves with one hand rather than several. */
+  --ease-standard: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration-base: 220ms;
+  --duration-slow: 420ms;
+
+  /* --- Elevation ----------------------------------------------------------
+     A glass panel is lit from above: a soft, low-contrast shadow beneath it
+     and a bright 1px highlight inset along its top edge. Both scale with
+     --shadow-color, which each theme below sets to a colour that reads as
+     "ambient light" rather than plain black. */
+  --shadow-color: 20 30 26;
+  --shadow-sm: 0 1px 0 rgb(255 255 255 / 0.25) inset, 0 6px 16px -6px rgb(var(--shadow-color) / 0.25);
+  --shadow-md: 0 1px 0 rgb(255 255 255 / 0.28) inset, 0 14px 32px -12px rgb(var(--shadow-color) / 0.32);
+  --shadow-lg: 0 1px 0 rgb(255 255 255 / 0.3) inset, 0 24px 56px -18px rgb(var(--shadow-color) / 0.4);
+
+  /* --- Touch targets --------------------------------------------------------
+     44px is the iOS Human Interface Guidelines minimum hit target; every
+     interactive control in .btn/.icon-btn/.input meets it by default. */
+  --control-height: 44px;
+  --control-height-sm: 36px;
+
+  /* --- Accent: signature (default) ---------------------------------------- */
+  --accent-h: 84;
+  --accent-s: 68%;
+  --accent-l: 66%;
+  --accent: hsl(var(--accent-h) var(--accent-s) var(--accent-l));
+  --accent-ink: #141a0c;
+  --accent-strong: hsl(var(--accent-h) var(--accent-s) calc(var(--accent-l) - 16%));
+
+  /* --- Light theme surfaces ------------------------------------------------
+     --glass-tint is the colour the blur mixes toward; --glass-alpha how much
+     of the panel's own background shows through it versus the tint. */
+  --bg: #f4f3ee;
+  --ink: #1c211b;
+  --muted: #5c655a;
+  --subtle: #85907f;
+  --line: rgb(28 33 27 / 0.12);
+  --line-strong: rgb(28 33 27 / 0.22);
+  --glass-tint: 250 249 244;
+  --glass-alpha: 0.62;
+  --glass-alpha-strong: 0.82;
+  --glass-blur: 20px;
+  --shadow-color: 28 33 27;
+}
+
+/* System dark, before any explicit choice is stored. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101210;
+    --ink: #edeee6;
+    --muted: #a3a99b;
+    --subtle: #767d6d;
+    --line: rgb(255 255 255 / 0.09);
+    --line-strong: rgb(255 255 255 / 0.16);
+    --glass-tint: 24 27 23;
+    --glass-alpha: 0.55;
+    --glass-alpha-strong: 0.78;
+    --shadow-color: 0 0 0;
+    --accent-ink: #0f1408;
+  }
+}
+
+/* Explicit choice, stored in localStorage by each surface's theme toggle. */
+:root[data-theme="dark"] {
+  --bg: #101210;
+  --ink: #edeee6;
+  --muted: #a3a99b;
+  --subtle: #767d6d;
+  --line: rgb(255 255 255 / 0.09);
+  --line-strong: rgb(255 255 255 / 0.16);
+  --glass-tint: 24 27 23;
+  --glass-alpha: 0.55;
+  --glass-alpha-strong: 0.78;
+  --shadow-color: 0 0 0;
+  --accent-ink: #0f1408;
+}
+:root[data-theme="light"] {
+  --bg: #f4f3ee;
+  --ink: #1c211b;
+  --muted: #5c655a;
+  --subtle: #85907f;
+  --line: rgb(28 33 27 / 0.12);
+  --line-strong: rgb(28 33 27 / 0.22);
+  --glass-tint: 250 249 244;
+  --glass-alpha: 0.62;
+  --glass-alpha-strong: 0.82;
+  --shadow-color: 28 33 27;
+  --accent-ink: #141a0c;
+}
+
+/* --- Accent variants ------------------------------------------------------
+   Three accent choices tint the same glass system rather than swapping it
+   for a different surface treatment, so switching accent in Preferences
+   never changes anything but the highlight colour. */
+:root[data-accent="glacier"] {
+  --accent-h: 213;
+  --accent-s: 62%;
+  --accent-l: 56%;
+  --accent-ink: #ffffff;
+}
+:root[data-accent="moss"] {
+  --accent-h: 103;
+  --accent-s: 34%;
+  --accent-l: 62%;
+  --accent-ink: #12190d;
+}
+
+/* Every surface opts in explicitly with this class, so tokens never leak
+   into content that has not been redesigned onto the glass system yet. */
+.veylune-glass-theme {
+  color: var(--ink);
+  background: var(--bg);
+  font-family: var(--font-sans);
+  accent-color: var(--accent);
+}
+.veylune-glass-theme *,
+.veylune-glass-theme *::before,
+.veylune-glass-theme *::after {
+  box-sizing: border-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .veylune-glass-theme *,
+  .veylune-glass-theme *::before,
+  .veylune-glass-theme *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

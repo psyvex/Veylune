@@ -1,0 +1,205 @@
+/**
+ * Common glass components, built from the tokens in tokens.css. Every button,
+ * card, input, and pill in the app should be one of these classes (or a
+ * small, deliberate variant of one) instead of a one-off rule, so the app
+ * reads as one interface rather than three screens that happen to share a
+ * font. See docs/75-production-task-pipeline.md task 7.
+ */
+
+/* --- Glass surface -----------------------------------------------------
+   The base material every panel, card, header, and HUD chip is built on:
+   a translucent tint, a blur of whatever sits behind it, a hairline
+   border, and the elevation shadow from tokens.css. `.glass-strong` raises
+   the opacity for panels that must stay legible over busy content (the
+   capture HUD over live video, the sticky header over the hero scene). */
+.glass {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: rgb(var(--glass-tint) / var(--glass-alpha));
+  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%);
+  box-shadow: var(--shadow-sm);
+}
+.glass-strong {
+  background: rgb(var(--glass-tint) / var(--glass-alpha-strong));
+  box-shadow: var(--shadow-md);
+}
+.glass-card {
+  padding: var(--space-5);
+}
+.glass-panel {
+  padding: var(--space-6);
+  border-radius: var(--radius-xl);
+}
+
+/* --- Buttons -------------------------------------------------------------
+   .btn is the shared shape (height, padding, radius, focus ring, motion);
+   the variant class decides fill. Every control meets the 44px minimum
+   touch target from tokens.css by default. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: 0 var(--space-5);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) ease, border-color var(--duration-fast) ease,
+    box-shadow var(--duration-fast) ease, opacity var(--duration-fast) ease;
+}
+.btn:active {
+  transform: translateY(0) scale(0.98);
+}
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
+}
+.btn-sm {
+  min-height: var(--control-height-sm);
+  padding: 0 var(--space-4);
+  font-size: 12px;
+}
+
+.btn-primary {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-glass {
+  color: var(--ink);
+  background: rgb(var(--glass-tint) / var(--glass-alpha));
+  border-color: var(--line);
+  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%);
+  box-shadow: var(--shadow-sm);
+}
+.btn-glass:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: rgb(var(--glass-tint) / var(--glass-alpha-strong));
+}
+
+.btn-ghost {
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+.btn-ghost:hover:not(:disabled) {
+  color: var(--ink);
+  background: rgb(var(--glass-tint) / 0.5);
+}
+
+/* Square icon-only control, still 44px by default. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height);
+  height: var(--control-height);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  transition: color var(--duration-fast) ease, background-color var(--duration-fast) ease,
+    border-color var(--duration-fast) ease, transform var(--duration-fast) var(--ease-standard);
+}
+.icon-btn:hover {
+  color: var(--ink);
+  background: rgb(var(--glass-tint) / 0.5);
+  border-color: var(--line);
+}
+.icon-btn-sm {
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
+}
+
+/* --- Inputs --------------------------------------------------------------- */
+.input {
+  width: 100%;
+  min-height: var(--control-height);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  background: rgb(var(--glass-tint) / 0.4);
+  font: inherit;
+  font-size: 14px;
+  transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgb(var(--accent-h) var(--accent-s) var(--accent-l) / 0.22);
+}
+
+/* --- Chips / badges -------------------------------------------------------- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  background: rgb(var(--glass-tint) / var(--glass-alpha));
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  font: 500 11px var(--font-mono);
+  letter-spacing: 0.06em;
+}
+.chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--subtle);
+}
+.chip[data-state="active"] .chip-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgb(var(--accent-h) var(--accent-s) var(--accent-l) / 0.18);
+}
+.chip[data-state="warning"] .chip-dot {
+  background: #e1b967;
+}
+.chip[data-state="error"] .chip-dot {
+  background: #ed8079;
+}
+
+/* --- Focus ------------------------------------------------------------- */
+.veylune-glass-theme a:focus-visible,
+.veylune-glass-theme button:focus-visible,
+.veylune-glass-theme input:focus-visible,
+.veylune-glass-theme [tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* --- Responsive container -------------------------------------------------
+   A single content-width clamp, used by every top-level page/section
+   instead of each one picking its own max-width. */
+.container {
+  width: min(1280px, 100%);
+  margin-inline: auto;
+  padding-inline: clamp(16px, 4vw, 64px);
+}
+
+@media (max-width: 640px) {
+  .btn {
+    font-size: 14px;
+  }
+}

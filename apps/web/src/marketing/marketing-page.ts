@@ -193,6 +193,13 @@ function renderClosing(): string {
   return `<section class="closing-section section-reveal"><div class="closing-object" data-voxel-object></div>${renderEyebrow("A MORE CONSIDERED WAY TO CAPTURE")}<h2>Look closer.<br><em>Keep more.</em></h2>${renderCtaButton("/studio#/capture", "Open Veylune Studio")}<div class="closing-coordinate">VEYLUNE SPATIAL ENGINE &nbsp;·&nbsp; LOCAL BY DESIGN</div></section>`;
 }
 
+/** The footer: the same brand mark as the header, a one-line tagline, a way back into
+ * Studio, and a build note. Direct-child order (brand, span, a, small) is what the
+ * grid layout in marketing.css's phone breakpoint keys off. */
+function renderFooter(): string {
+  return `<footer class="marketing-footer">${renderBrandMark({ ariaLabel: "Veylune home" })}<span>Spatial capture, made tangible.</span><a href="/studio#/overview">Open Studio <span aria-hidden="true">↗</span></a><small>LOCAL BY DESIGN</small></footer>`;
+}
+
 // ---------------------------------------------------------------------------------------
 // Mount
 // ---------------------------------------------------------------------------------------
@@ -202,7 +209,7 @@ export function mountMarketingPage(root: HTMLElement): { dispose(): void } {
   // otherwise the page opens on whatever the OS/browser already prefers.
   applyTheme(readStoredTheme() ?? systemTheme());
 
-  root.innerHTML = `<div class="marketing-shell">
+  root.innerHTML = `<div class="marketing-shell veylune-glass-theme">
     ${renderHeader()}
     <main id="top">
       ${renderHero()}
@@ -213,6 +220,7 @@ export function mountMarketingPage(root: HTMLElement): { dispose(): void } {
       ${renderPrivacy()}
       ${renderClosing()}
     </main>
+    ${renderFooter()}
   </div>`;
 
   // --- Theme toggle ----------------------------------------------------------------

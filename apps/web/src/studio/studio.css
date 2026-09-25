@@ -1,62 +1,87 @@
-:root {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #eeefe8;
-  background: #111310;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; }
+body { margin: 0; min-width: 320px; font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 button, input { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 a { color: inherit; text-decoration: none; }
 
+/**
+ * Studio surfaces read straight off the shared glass tokens in
+ * src/design/tokens.css: --bg/--ink/--muted/--subtle/--line/--accent and the
+ * --glass-* family. These aliases keep the many --canvas/--surface/--text
+ * rules below unchanged while their values now come from one shared source,
+ * so Studio, the marketing page and the capture HUD are one design language
+ * (docs/75-production-task-pipeline.md task 7) rather than three palettes
+ * that happen to share a font. The three "theme" options in Preferences
+ * (see THEMES in studio-app.ts) are accent tints of this same glass
+ * system now (data-accent, set alongside data-theme on <html> — see
+ * design/tokens.css), not separate surface treatments.
+ */
 .studio-shell {
-  --canvas: #111310;
-  --sidebar: #151713;
-  --surface: #191c18;
-  --surface-raised: #1e211d;
-  --surface-hover: #252923;
-  --line: #2a2e28;
-  --line-strong: #393e36;
-  --text: #eeefe8;
-  --muted: #a0a497;
-  --subtle: #747a70;
-  --accent: #d5f36a;
-  --accent-ink: #1a2110;
-  --accent-soft: #29331d;
-  --blue: #8fbcff;
-  --success: #a9df96;
+  --canvas: var(--bg);
+  --sidebar: rgb(var(--glass-tint) / var(--glass-alpha-strong));
+  --surface: rgb(var(--glass-tint) / var(--glass-alpha));
+  --surface-raised: rgb(var(--glass-tint) / var(--glass-alpha-strong));
+  --surface-hover: rgb(var(--glass-tint) / 0.9);
+  --line: var(--line);
+  --line-strong: var(--line-strong);
+  --text: var(--ink);
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --blue: hsl(213 62% 62%);
+  --success: hsl(103 40% 62%);
   min-height: 100vh;
   display: grid;
   grid-template-columns: 252px minmax(0, 1fr);
   color: var(--text);
   background:
-    radial-gradient(ellipse at 78% 0%, color-mix(in srgb, var(--accent) 4%, transparent), transparent 38rem),
+    radial-gradient(ellipse at 78% 0%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 38rem),
     var(--canvas);
   transition: background-color 350ms ease, color 250ms ease;
-}
-.studio-shell[data-theme="glacier"] {
-  --canvas: #eef1f5; --sidebar: #e7ebf1; --surface: #f8f9fb; --surface-raised: #fff;
-  --surface-hover: #edf2f9; --line: #dce2eb; --line-strong: #c7d0dc; --text: #202b38;
-  --muted: #596878; --subtle: #7e8c9c; --accent: #356dcc; --accent-ink: #fff;
-  --accent-soft: #e1eafa; --blue: #356dcc; --success: #287d61;
-  background: radial-gradient(ellipse at 78% 0%, #dbe8fa, transparent 42rem), var(--canvas);
-}
-.studio-shell[data-theme="moss"] {
-  --canvas: #151714; --sidebar: #191c18; --surface: #1d211b; --surface-raised: #24291f;
-  --surface-hover: #2a3125; --line: #30372e; --line-strong: #46503f; --text: #edeee5;
-  --muted: #a5ac9a; --subtle: #78816e; --accent: #a8d38c; --accent-ink: #172013;
-  --accent-soft: #293827; --blue: #b1c89d; --success: #a8d38c;
 }
 
 .studio-sidebar {
   height: 100vh; position: sticky; top: 0; display: flex; flex-direction: column;
-  padding: 26px 16px 18px; background: color-mix(in srgb, var(--sidebar) 96%, transparent);
+  padding: 26px 16px 18px; background: var(--sidebar);
+  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%); -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%);
   border-right: 1px solid var(--line); z-index: 5;
+}
+
+/* One frosted-glass surface, applied to every panel that already reads its
+   background from --surface/--surface-raised: the topbar, project cards,
+   the import cards, settings sections, the stat strip, and asset tiles all
+   share the same blur/saturation/radius rather than each being its own flat
+   fill. Buttons get the matching treatment: filled (.action-primary /
+   .topbar-cta) for the primary action, glass (.action-secondary /
+   .icon-button) for everything else, both at the 44px minimum touch target
+   from design/tokens.css. */
+.studio-topbar,
+.quick-stats,
+.project-card,
+.import-main-card,
+.import-info-card,
+.settings-section,
+.workflow-strip,
+.empty-state,
+.storage-status,
+.theme-option,
+.refinement-card,
+.metrics-card,
+.capabilities-card,
+.asset-card {
+  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%);
+}
+.project-card, .import-main-card, .import-info-card, .settings-section, .workflow-strip, .empty-state, .storage-status, .theme-option, .asset-card {
+  border-radius: var(--radius-lg);
+}
+.action-primary, .topbar-cta {
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+.action-secondary, .icon-button {
+  background: rgb(var(--glass-tint) / var(--glass-alpha));
+  backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%);
+  border-radius: var(--radius-md);
 }
 .studio-brand { display: flex; align-items: center; gap: 11px; padding: 0 11px; width: fit-content; }
 /* The identity, drawn in the theme's own accent: the mark carries its depth as

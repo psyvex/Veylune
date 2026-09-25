@@ -46,7 +46,8 @@ describe("Studio navigation and appearance", () => {
     await settle();
 
     root.querySelector<HTMLButtonElement>('[data-theme-option="glacier"]')?.click();
-    expect(root.querySelector(".studio-shell")?.getAttribute("data-theme")).toBe("glacier");
+    expect(root.querySelector(".studio-shell")?.getAttribute("data-accent")).toBe("glacier");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
     expect(localStorage.getItem("veylune-theme")).toBe("glacier");
     expect(root.querySelector('[data-theme-option="glacier"]')?.getAttribute("aria-pressed")).toBe("true");
   });

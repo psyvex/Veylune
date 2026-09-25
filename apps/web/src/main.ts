@@ -3,6 +3,8 @@ import { mountStudioApp } from "./studio/studio-app";
 import { mountMarketingPage } from "./marketing/marketing-page";
 import { mountVeyluneSplash } from "./branding/splash";
 import { enginePreferredBackend, engineVersion, loadEngine } from "./engine/index.js";
+import "./design/tokens.css";
+import "./design/components.css";
 import "./branding/voxel-bloom.css";
 import "./capture/capture.css";
 import "./studio/studio.css";

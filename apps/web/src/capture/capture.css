@@ -1,17 +1,19 @@
-:root {
-  font-family: Manrope, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #f1f0e9;
-  background: #111310;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  --surface: #1a1c18;
-  --surface-raised: #20231e;
-  --line: #30332d;
-  --muted: #92968c;
-  --lime: #c6ef72;
+/**
+ * Capture HUD surfaces read off the same shared glass tokens the rest of the
+ * app uses (src/design/tokens.css), one font (Inter, matching Studio and
+ * marketing rather than this route's own Manrope), and the shared --accent
+ * in place of a route-local --lime. See docs/75-production-task-pipeline.md
+ * task 7.
+ */
+.veylune-capture {
+  --surface: rgb(var(--glass-tint) / var(--glass-alpha));
+  --surface-raised: rgb(var(--glass-tint) / var(--glass-alpha-strong));
+  --line: var(--line);
+  --muted: var(--muted);
+  --lime: var(--accent);
   --amber: #e1b967;
   --red: #ed8079;
+  color: var(--ink);
 }
 
 * { box-sizing: border-box; }
@@ -39,18 +41,18 @@ button:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
 .capture-stage video { width: 100%; height: 100%; max-height: 620px; position: absolute; inset: 0; object-fit: cover; }
 .capture-stage canvas { display: none; }
 .capture-stage-top { position: absolute; z-index: 2; top: 20px; right: 20px; left: 20px; display: flex; justify-content: space-between; gap: 12px; }
-.stage-chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid #ffffff1a; border-radius: 6px; background: #111310c9; color: #d3d5cd; font: 10px "SFMono-Regular", Consolas, monospace; letter-spacing: .05em; backdrop-filter: blur(8px); }
+.stage-chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid #ffffff1a; border-radius: var(--radius-sm); background: #111310c9; color: #d3d5cd; font: 10px "SFMono-Regular", Consolas, monospace; letter-spacing: .05em; backdrop-filter: blur(14px) saturate(150%); -webkit-backdrop-filter: blur(14px) saturate(150%); }
 .stage-chip .stage-dot { background: var(--lime); }
-.capture-status { position: absolute; z-index: 2; right: 20px; bottom: 20px; left: 20px; width: fit-content; max-width: calc(100% - 40px); padding: 10px 13px; border: 1px solid #ffffff1a; border-radius: 7px; background: #111310d9; color: #e5e6df; font-size: 12px; backdrop-filter: blur(8px); }
+.capture-status { position: absolute; z-index: 2; right: 20px; bottom: 20px; left: 20px; width: fit-content; max-width: calc(100% - 40px); padding: 10px 13px; border: 1px solid #ffffff1a; border-radius: var(--radius-md); background: #111310d9; color: #e5e6df; font-size: 12px; backdrop-filter: blur(14px) saturate(150%); -webkit-backdrop-filter: blur(14px) saturate(150%); }
 .capture-controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
-.capture-controls button,.button-subtle { min-height: 42px; padding: 0 16px; border: 1px solid #3b3f37; border-radius: 8px; background: #20231e; color: #e8e9e1; cursor: pointer; font-size: 12px; font-weight: 600; transition: background .18s ease, border-color .18s ease, transform .18s ease; }
+.capture-controls button,.button-subtle { min-height: var(--control-height, 44px); padding: 0 16px; border: 1px solid #3b3f37; border-radius: var(--radius-md); background: #20231e; color: #e8e9e1; cursor: pointer; font-size: 12px; font-weight: 600; transition: background .18s ease, border-color .18s ease, transform .18s ease; }
 .capture-controls button:hover:not(:disabled),.button-subtle:hover:not(:disabled) { transform: translateY(-1px); border-color: #666b5e; background: #292c26; }
 .capture-controls .button-primary { border-color: var(--lime); background: var(--lime); color: #191d11; }
 .capture-controls .button-primary:hover:not(:disabled) { border-color: #d7ffa0; background: #d7ffa0; }
 button:disabled { cursor: not-allowed; opacity: .42; }
 
 .capture-side { display: grid; gap: 14px; }
-.refinement-card,.metrics-card { padding: 21px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.refinement-card,.metrics-card { padding: 21px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%); -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%); box-shadow: var(--shadow-sm); }
 .refinement-card { background: linear-gradient(145deg, #20251b 0%, #1a1c18 65%); }
 .card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .card-heading .eyebrow { margin-bottom: 7px; }
@@ -73,7 +75,7 @@ button:disabled { cursor: not-allowed; opacity: .42; }
 .capture-metrics > div { padding: 12px 0 10px; border-top: 1px solid #2c2f29; }
 .capture-metrics dt { color: var(--muted); font-size: 10px; }
 .capture-metrics dd { margin: 6px 0 0; color: #e5e7de; font: 500 13px "SFMono-Regular", Consolas, monospace; overflow-wrap: anywhere; }
-.capabilities-card { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 13px 16px; border: 1px solid #292c26; border-radius: 10px; color: #83877d; font: 9px "SFMono-Regular", Consolas, monospace; }
+.capabilities-card { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 13px 16px; border: 1px solid var(--line); border-radius: var(--radius-md); background: rgb(var(--glass-tint) / var(--glass-alpha)); backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%); -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) saturate(150%); color: #83877d; font: 9px "SFMono-Regular", Consolas, monospace; }
 .capabilities-card > span:first-child { color: #b9bdb2; }
 .capabilities-card b { color: #aab19b; font-weight: 400; }
 
