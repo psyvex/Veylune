@@ -93,10 +93,10 @@ describe("Veylune marketing page", () => {
 });
 
 describe("Veylune identity on the marketing page", () => {
-  it("replaces the letter mark with the shared geometry, twice, as decoration", () => {
+  it("replaces the letter mark with the shared geometry, as decoration", () => {
     const root = mountPage();
     const marks = root.querySelectorAll(".marketing-mark .veylune-mark");
-    expect(marks).toHaveLength(2); // header and footer
+    expect(marks).toHaveLength(1); // header only — the page footer was removed
     marks.forEach((mark) => {
       // The word sits beside it, and the links name themselves, so the mark itself
       // must not be announced a second time.

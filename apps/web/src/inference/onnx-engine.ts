@@ -1,9 +1,9 @@
 import type { InferenceBackend } from "./model";
-import type { InferenceEngine, TensorInput, TensorOutput } from "./engine";
+import type { InferenceEngine, TensorDtype, TensorInput, TensorOutput } from "./engine";
 
 export interface OnnxRuntimeModule {
   InferenceSession: { create(model: ArrayBuffer, options: { executionProviders: string[] }): Promise<OnnxSession> };
-  Tensor: new (type: "float32", data: Float32Array, dims: readonly number[]) => OnnxTensor;
+  Tensor: new (type: TensorDtype, data: TensorInput["data"], dims: readonly number[]) => OnnxTensor;
 }
 
 interface OnnxSession {
@@ -34,7 +34,7 @@ export class OnnxInferenceEngine implements InferenceEngine {
     const session = this.session;
     if (!session) throw new Error("ONNX inference session is not loaded.");
     if (session.inputNames.length !== 1 || session.outputNames.length !== 1) throw new Error("The realtime adapter requires exactly one input and one output tensor.");
-    const tensor = new this.runtime.Tensor("float32", input.data, input.shape);
+    const tensor = new this.runtime.Tensor(input.dtype ?? "float32", input.data, input.shape);
     const outputs = await session.run({ [session.inputNames[0]!]: tensor });
     const output = outputs[session.outputNames[0]!];
     if (!output) throw new Error("ONNX runtime returned no output tensor.");

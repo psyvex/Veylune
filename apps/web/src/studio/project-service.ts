@@ -51,6 +51,7 @@ export class StudioProjectService {
     if (images.length > 1000) throw new Error("A project can contain up to 1,000 images at a time.");
     const totalBytes = images.reduce((total, file) => total + file.size, 0);
     if (!Number.isSafeInteger(totalBytes) || totalBytes <= 0) throw new Error("The selected images are empty or too large to import.");
+    await this.assertStorageAvailable(totalBytes);
     const name = requestedName.trim().slice(0, 120) || inferProjectName(images[0]!);
     const id = this.createId();
     const createdAt = this.now().toISOString();
@@ -84,6 +85,22 @@ export class StudioProjectService {
     }
   }
 
+  /** Best-effort check that the device can accept `byteLength` more data
+   * before we start an import that would fail partway through.navigator.storage
+   * .estimate is async and coarse; we treat "clearly not enough" as fatal but
+   * tolerate an unavailable estimate rather than blocking valid imports. */
+  private async assertStorageAvailable(byteLength: number): Promise<void> {
+    const storage = navigator.storage;
+    if (!storage?.estimate) return;
+    let estimate: { usage?: number; quota?: number };
+    try { estimate = await storage.estimate(); } catch { return; }
+    if (typeof estimate.quota !== "number" || typeof estimate.usage !== "number") return;
+    if (estimate.quota <= 0) return;
+    const free = estimate.quota - estimate.usage;
+    // IndexedDB stores blobs with overhead; require 1.5x headroom.
+    if (free < byteLength * 1.5) throw new Error(`Not enough local storage — about ${formatStorage(free)} free but this import needs ${formatStorage(byteLength)}.`);
+  }
+
   async attachPly(projectId: string, plyContent: string): Promise<void> {
     const projects = await this.store.listProjects();
     const project = projects.find((p) => p.id === projectId);
@@ -106,4 +123,5 @@ export function isSupportedImage(file: Pick<File, "name" | "type" | "size">): bo
 export function mimeFromName(name: string): string { return MIME_BY_EXTENSION[extension(name)] ?? "application/octet-stream"; }
 export function relativeName(file: File): string { return (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name; }
 function extension(name: string): string { return name.split(".").pop()?.toLowerCase() ?? ""; }
+function formatStorage(bytes: number): string { const units = ["B", "KB", "MB", "GB"]; let value = Math.max(0, bytes); let unit = 0; while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit += 1; } return `${value >= 10 || unit === 0 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`; }
 function inferProjectName(file: File): string { const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath; const folder = relativePath?.split("/")[0]; return folder || file.name.replace(/\.[^.]+$/, "") || "Imported project"; }

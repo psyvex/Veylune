@@ -2,6 +2,26 @@
 
 use veylune_core::Confidence;
 
+pub mod distortion;
+pub mod linear_solve;
+pub mod reprojection;
+pub mod se3;
+pub mod sparse_normal_equations;
+pub mod triangulation;
+pub mod vector;
+
+/// Pinhole camera intrinsics, mirroring `apps/web/src/capture/geometry.ts`'s
+/// `CameraIntrinsics`. `f64` to match the JS `number` port it validates
+/// against (see `se3.rs`'s module doc for why this crate mixes `f32`
+/// [`Bounds3`]/[`GeometryQuality`] with `f64` reconstruction-math ports).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CameraIntrinsics {
+    pub fx: f64,
+    pub fy: f64,
+    pub cx: f64,
+    pub cy: f64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Bounds3 {
     pub min: [f32; 3],

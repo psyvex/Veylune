@@ -1,0 +1,21 @@
+{
+  "fixtureId": "bundle-adjustment-synthetic",
+  "version": "1",
+  "description": "Two-camera, four-landmark synthetic bundle-adjustment problem used to benchmark/exercise the Levenberg-Marquardt optimizer without a real capture. Not a production photograph.",
+  "landmarks": [
+    { "id": "p0", "x": -1, "y": -1, "z": 4, "observations": 3, "lastSeenFrame": 2 },
+    { "id": "p1", "x": 1, "y": -1, "z": 4, "observations": 3, "lastSeenFrame": 2 },
+    { "id": "p2", "x": -1, "y": 1, "z": 5, "observations": 3, "lastSeenFrame": 2 },
+    { "id": "p3", "x": 1, "y": 1, "z": 5, "observations": 3, "lastSeenFrame": 2 }
+  ],
+  "observations": [
+    { "landmarkId": "p0", "cameraId": "c0", "observedX": -1, "observedY": -1 },
+    { "landmarkId": "p0", "cameraId": "c1", "observedX": -0.99, "observedY": -1.01 },
+    { "landmarkId": "p1", "cameraId": "c0", "observedX": 1, "observedY": -1 },
+    { "landmarkId": "p1", "cameraId": "c1", "observedX": 1.01, "observedY": -1.01 },
+    { "landmarkId": "p2", "cameraId": "c0", "observedX": -1, "observedY": 1 },
+    { "landmarkId": "p2", "cameraId": "c1", "observedX": -0.99, "observedY": 0.99 },
+    { "landmarkId": "p3", "cameraId": "c0", "observedX": 1, "observedY": 1 },
+    { "landmarkId": "p3", "cameraId": "c1", "observedX": 1.01, "observedY": 0.99 }
+  ]
+}

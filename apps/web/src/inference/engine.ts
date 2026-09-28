@@ -1,12 +1,26 @@
 import type { InferenceBackend, InferenceRequest, InferenceResult } from "./model";
 import type { InferenceRuntimeAdapter } from "./runtime";
 
+/** The ONNX tensor element types this engine abstraction actually needs to
+ * carry — extend as a real model needs another one, not speculatively.
+ * Widened from `Float32Array`-only after `models/movenet-singlepose-lightning/model-card.md`'s
+ * "Integration gap" note: that model's real input is `int32`, and this
+ * type had never been run against a real model until then. */
+export type TensorDtype = "float32" | "int32" | "uint8";
+export type TensorData = Float32Array | Int32Array | Uint8Array;
+
 export interface TensorInput {
-  readonly data: Float32Array;
+  readonly data: TensorData;
   readonly shape: readonly number[];
+  /** Defaults to `"float32"` — every caller before this field existed
+   * already meant float32, so this keeps them source-compatible. */
+  readonly dtype?: TensorDtype;
 }
 
 export interface TensorOutput {
+  /** Model outputs observed so far are all float32 (including MoveNet's,
+   * despite its int32 input) — narrower than `TensorInput.data` on
+   * purpose; widen only once a real model's output needs it. */
   readonly data: Float32Array;
   readonly shape: readonly number[];
 }

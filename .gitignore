@@ -43,4 +43,5 @@ Thumbs.db
 .local/
 .vscode-test/
 playwright-report/
+.playwright-mcp/
 test-results/

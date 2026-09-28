@@ -6,6 +6,7 @@ import { describeTracking, describeOptimization } from "../capture/capture-hud-c
 import { IndexedDbProjectStore } from "../storage/indexeddb";
 import { isSupportedImage, relativeName, StudioProjectService, type ProjectWithAssets } from "./project-service";
 import { exportPointCloudPly } from "../capture/export-ply";
+import { colorizeLandmarks } from "../capture/ply-colors";
 import { analyzeImageFile, categorizeQuality, findDuplicateGroups, qualityReasonLabel } from "./image-analysis";
 import { mountVeyluneLoader, type VeyluneLoader } from "../branding/veylune-loader";
 import { voxelBloomSvg } from "../branding/voxel-bloom";
@@ -96,6 +97,46 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
   document.addEventListener("click", onOutsideClick);
   document.addEventListener("keydown", onEscapeKey);
   window.addEventListener("popstate", routeHandler);
+  let lastToastAt = 0;
+  const showErrorToast = (message: string): void => {
+    if (disposed) return;
+    // Debounce so a burst of rejections doesn't stack toasts.
+    const now = Date.now();
+    if (now - lastToastAt < 4000) return;
+    lastToastAt = now;
+    const toast = document.createElement("div");
+    toast.className = "error-toast";
+    toast.setAttribute("role", "alert");
+    toast.textContent = message.length > 160 ? `${message.slice(0, 157)}…` : message;
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add("error-toast--shown"));
+    setTimeout(() => { toast.classList.remove("error-toast--shown"); setTimeout(() => toast.remove(), 300); }, 6000);
+  };
+  const onUnhandledRejection = (event: PromiseRejectionEvent): void => { console.error("Uncaught rejection:", event.reason); showErrorToast(event.reason instanceof Error ? event.reason.message : "Something went wrong. Try again."); };
+  const onWindowError = (event: ErrorEvent): void => { console.error("Uncaught error:", event.error ?? event.message); showErrorToast("Something went wrong. Try again."); };
+  window.addEventListener("unhandledrejection", onUnhandledRejection);
+  window.addEventListener("error", onWindowError);
+  // Durability for local-first data: persistent storage exempts IndexedDB
+  // from the browser's eviction heuristics (honored in Chromium; iOS Safari
+  // has no such API and evicts freely). Best-effort — never blocks boot. If
+  // protection is absent and quota runs low, warn early so users export
+  // before the browser silently purges their projects.
+  const warnStoragePressure = (): void => {
+    if (!navigator.storage?.estimate) return;
+    void navigator.storage.estimate().then((estimate) => {
+      const quota = estimate.quota ?? 0; const usage = estimate.usage ?? 0;
+      if (quota <= 0) return;
+      const free = quota - usage;
+      if (free < Math.min(quota * 0.1, 512 * 1024 * 1024)) {
+        showErrorToast(`Local storage is nearly full — about ${formatBytes(Math.max(0, free))} free. Export and delete old projects before your next capture.`);
+      }
+    }).catch(() => undefined);
+  };
+  if (navigator.storage?.persist) {
+    void navigator.storage.persist().then((persisted) => { if (!persisted) warnStoragePressure(); }).catch(() => undefined);
+  } else {
+    warnStoragePressure();
+  }
   void renderRoute();
 
   async function renderRoute(): Promise<void> {
@@ -249,7 +290,7 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
   function renderSettings(): void {
     const APPEARANCE = [{ id: "light", name: "Light", detail: "Paper surfaces, dark text" }, { id: "dark", name: "Dark", detail: "Graphite surfaces, light text" }] as const;
     const active = currentTheme();
-    content.innerHTML = `<section class="page-intro"><div><p class="overline">MAKE IT YOUR SPACE</p><h1>Preferences</h1><p>Adjust the Studio’s appearance. Your choice is saved on this device and shared with the marketing site.</p></div></section><section class="settings-section"><div class="settings-heading"><div><h2>Appearance</h2><p>One glass theme, light or dark.</p></div><span class="settings-saved">Saved automatically</span></div><div class="theme-grid">${APPEARANCE.map((item) => `<button class="theme-option ${active === item.id ? "is-selected" : ""}" data-theme-option="${item.id}" type="button" aria-pressed="${active === item.id}"><span class="theme-preview theme-${item.id}"><i></i><i></i><i></i><b></b></span><span class="theme-copy"><b>${item.name}</b><small>${item.detail}</small></span><span class="theme-check" aria-hidden="true">✓</span></button>`).join("")}</div></section><section class="settings-section privacy-settings"><div class="settings-heading"><div><h2>Local-first storage</h2><p>Imported images and project records remain in this browser’s IndexedDB.</p></div></div><div class="storage-status"><span class="storage-pulse"></span><div><b>Browser storage enabled</b><small>Veylune does not send source images to a server.</small></div></div><div class="storage-quota" data-storage-quota><span class="quota-label">Storage used</span><span class="quota-value" data-quota-used>Checking...</span></div></section><section class="settings-section"><div class="settings-heading"><div><h2>Data management</h2><p>Permanently remove all projects and source images from this browser.</p></div></div><button class="action-danger" type="button" data-action="clear-data-settings" style="margin-top:14px">Clear all local data</button></section>`;
+    content.innerHTML = `<section class="page-intro"><div><p class="overline">MAKE IT YOUR SPACE</p><h1>Preferences</h1><p>Adjust the Studio’s appearance. Your choice is saved on this device and shared with the marketing site.</p></div></section><section class="settings-section"><div class="settings-heading"><div><h2>Appearance</h2><p>One glass theme, light or dark.</p></div><span class="settings-saved">Saved automatically</span></div><div class="theme-grid">${APPEARANCE.map((item) => `<button class="theme-option ${active === item.id ? "is-selected" : ""}" data-theme-option="${item.id}" type="button" aria-pressed="${active === item.id}"><span class="theme-preview theme-${item.id}"><i></i><i></i><i></i><b></b></span><span class="theme-copy"><b>${item.name}</b><small>${item.detail}</small></span><span class="theme-check" aria-hidden="true">✓</span></button>`).join("")}</div></section><section class="settings-section privacy-settings"><div class="settings-heading"><div><h2>Local-first storage</h2><p>Imported images and project records remain in this browser’s IndexedDB.</p></div></div><div class="storage-status"><span class="storage-pulse"></span><div><b>Browser storage enabled</b><small>Veylune does not send source images to a server.</small><small data-storage-persistence></small></div></div><div class="storage-quota" data-storage-quota><span class="quota-label">Storage used</span><span class="quota-value" data-quota-used>Checking...</span></div></section><section class="settings-section"><div class="settings-heading"><div><h2>Data management</h2><p>Permanently remove all projects and source images from this browser.</p></div></div><button class="action-danger" type="button" data-action="clear-data-settings" style="margin-top:14px">Clear all local data</button></section>`;
     content.querySelectorAll<HTMLButtonElement>("[data-theme-option]").forEach((button) => button.addEventListener("click", () => {
       const next = button.dataset.themeOption;
       if (next !== "light" && next !== "dark") return;
@@ -271,6 +312,20 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
         usedEl.textContent = quota > 0 ? `${formatBytes(used)} of ${formatBytes(quota)}${pct !== null ? ` (${pct}%)` : ""}` : formatBytes(used);
       });
     } else { const usedEl = content.querySelector<HTMLElement>("[data-quota-used]"); if (usedEl) usedEl.textContent = "Not available in this browser"; }
+    // Tell the user whether the browser promises to keep this data, or may
+    // evict it under storage pressure (iOS Safari, or persist() denied).
+    const persistEl = content.querySelector<HTMLElement>("[data-storage-persistence]");
+    if (persistEl) {
+      if (navigator.storage?.persisted) {
+        void navigator.storage.persisted().then((persisted) => {
+          persistEl.textContent = persisted
+            ? "Protected from automatic browser cleanup."
+            : "The browser may free this data under storage pressure — export important scans.";
+        }).catch(() => undefined);
+      } else {
+        persistEl.textContent = "This browser manages storage automatically — keep a copy of important scans as PLY exports.";
+      }
+    }
   }
 
   function renderCapture(): void {
@@ -303,52 +358,72 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
     const plyAsset = project.assets.find((a) => a.type.includes("ply") || a.name.endsWith(".ply"));
     activeAssetUrls = project.assets.map((asset) => asset.url);
     const plyBtnHtml = plyAsset ? `<a class="btn-subtle" href="${plyAsset.url}" download="${escapeHTML(project.name.replace(/\s+/g,"_"))}.ply">⬇ Download PLY</a>` : "";
-    content.innerHTML = `<section class="page-intro project-detail-intro"><div><a class="back-link" href="/studio/projects">← All projects</a><p class="overline">LOCAL PROJECT · ${new Date(project.createdAt).toLocaleDateString()}</p><div class="project-name-row"><h1 class="project-detail-name" data-project-name>${escapeHTML(project.name)}</h1><button class="icon-btn-subtle" type="button" data-action="rename-project" aria-label="Rename project" title="Rename">✎</button></div><p>${imageAssets.length} source image${imageAssets.length === 1 ? "" : "s"} · Stored on this device${plyAsset ? " · Point cloud saved" : ""}</p></div><div class="project-detail-actions">${imageAssets.length ? `<button class="action-primary" type="button" data-action="reconstruct">⬡ &nbsp; Reconstruct</button>` : `<a class="action-primary" href="/studio/capture">◎ &nbsp; Start a capture</a>`}${plyBtnHtml}<button class="action-danger" type="button" data-action="delete-project">Delete project</button></div></section><section class="recon-panel" data-recon-panel hidden><div class="recon-panel-inner"><div class="recon-map" data-recon-map></div><div class="recon-stats"><div class="recon-stat"><span class="recon-stat-label">Status</span><span class="recon-stat-value" data-recon-tracking>Waiting</span></div><div class="recon-stat"><span class="recon-stat-label">Keyframes</span><span class="recon-stat-value" data-recon-keyframes>0</span></div><div class="recon-stat"><span class="recon-stat-label">Points</span><span class="recon-stat-value" data-recon-points>0</span></div><div class="recon-stat"><span class="recon-stat-label">Progress</span><span class="recon-stat-value" data-recon-progress>0%</span></div></div><progress class="recon-progress-bar" data-recon-bar value="0" max="100"></progress><p class="recon-message" data-recon-message aria-live="polite"></p><button class="btn-subtle" type="button" data-action="cancel-recon">Cancel</button><button class="btn-subtle" type="button" data-action="download-recon-ply" hidden>⬇ Download PLY</button></div></section><section class="section-block asset-section"><div class="section-heading"><div><p class="overline">SOURCE MATERIAL</p><h2>Imported images</h2></div><span class="asset-count">${imageAssets.length.toString().padStart(2,"0")} FILES</span></div><div class="asset-grid">${imageAssets.map((asset) => `<figure class="asset-card"><img src="${asset.url}" alt="${escapeHTML(asset.name)}" loading="lazy"><figcaption><span>${escapeHTML(asset.name.split("/").pop() ?? asset.name)}</span><small>${formatBytes(asset.size)}</small></figcaption></figure>`).join("")}</div></section>`;
+    content.innerHTML = `<section class="page-intro project-detail-intro"><div><a class="back-link" href="/studio/projects">← All projects</a><p class="overline">LOCAL PROJECT · ${new Date(project.createdAt).toLocaleDateString()}</p><div class="project-name-row"><h1 class="project-detail-name" data-project-name>${escapeHTML(project.name)}</h1><button class="icon-btn-subtle" type="button" data-action="rename-project" aria-label="Rename project" title="Rename">✎</button></div><p>${imageAssets.length} source image${imageAssets.length === 1 ? "" : "s"} · Stored on this device${plyAsset ? " · Point cloud saved" : ""}</p></div><div class="project-detail-actions">${imageAssets.length ? `<button class="action-primary" type="button" data-action="reconstruct">⬡ &nbsp; Reconstruct</button>` : `<a class="action-primary" href="/studio/capture">◎ &nbsp; Start a capture</a>`}${plyBtnHtml}<button class="action-danger" type="button" data-action="delete-project">Delete project</button></div></section><section class="recon-panel" data-recon-panel hidden><div class="recon-panel-inner"><div class="recon-map" data-recon-map></div><p class="scale-note">Approximate monocular scale — check distances against a known object after export.</p><div class="recon-stats"><div class="recon-stat"><span class="recon-stat-label">Status</span><span class="recon-stat-value" data-recon-tracking>Waiting</span></div><div class="recon-stat"><span class="recon-stat-label">Keyframes</span><span class="recon-stat-value" data-recon-keyframes>0</span></div><div class="recon-stat"><span class="recon-stat-label">Points</span><span class="recon-stat-value" data-recon-points>0</span></div><div class="recon-stat"><span class="recon-stat-label">Progress</span><span class="recon-stat-value" data-recon-progress>0%</span></div></div><progress class="recon-progress-bar" data-recon-bar value="0" max="100"></progress><p class="recon-message" data-recon-message aria-live="polite"></p><button class="btn-subtle" type="button" data-action="cancel-recon">Cancel</button><button class="btn-subtle" type="button" data-action="download-recon-ply" hidden>⬇ Download PLY</button></div></section><section class="section-block asset-section"><div class="section-heading"><div><p class="overline">SOURCE MATERIAL</p><h2>Imported images</h2></div><span class="asset-count">${imageAssets.length.toString().padStart(2,"0")} FILES</span></div><div class="asset-grid">${imageAssets.map((asset) => `<figure class="asset-card"><img src="${asset.url}" alt="${escapeHTML(asset.name)}" loading="lazy"><figcaption><span>${escapeHTML(asset.name.split("/").pop() ?? asset.name)}</span><small>${formatBytes(asset.size)}</small></figcaption></figure>`).join("")}</div></section>`;
 
     const reconPanel = content.querySelector<HTMLElement>("[data-recon-panel]")!;
     const reconMapEl = content.querySelector<HTMLElement>("[data-recon-map]")!;
     activeMapViewer = mountPointCloudViewer(reconMapEl);
     const mapViewer = activeMapViewer;
 
+    // The reconstruction keeps running after a route change (cancel only stops
+    // new frames), so every panel write must tolerate the panel being gone —
+    // content.innerHTML was replaced and querySelector now returns null.
+    const writeRecon = (selector: string, text: string): void => {
+      const el = content.querySelector<HTMLElement>(selector);
+      if (el) el.textContent = text;
+    };
+
     const updateReconTelemetry = (state: CaptureTelemetry): void => {
       const optimization = describeOptimization(state.optimization);
       const statusLabel = state.tracking === "idle" ? "Done" : state.tracking === "lost" ? "Lost tracking" : state.tracking === "recovering" ? "Recovering" : "Processing";
-      content.querySelector<HTMLElement>("[data-recon-tracking]")!.textContent = statusLabel;
-      content.querySelector<HTMLElement>("[data-recon-keyframes]")!.textContent = String(state.keyframes);
-      content.querySelector<HTMLElement>("[data-recon-points]")!.textContent = String(state.landmarks);
-      content.querySelector<HTMLElement>("[data-recon-optimization]")!.textContent = state.optimization === "idle" && state.tracking !== "idle" ? "Building" : optimization.label;
+      writeRecon("[data-recon-tracking]", statusLabel);
+      writeRecon("[data-recon-keyframes]", String(state.keyframes));
+      writeRecon("[data-recon-points]", String(state.landmarks));
+      writeRecon("[data-recon-optimization]", state.optimization === "idle" && state.tracking !== "idle" ? "Building" : optimization.label);
       const pct = Math.round(Math.max(0, Math.min(1, state.progress)) * 100);
-      content.querySelector<HTMLElement>("[data-recon-progress]")!.textContent = `${pct}%`;
-      const bar = content.querySelector<HTMLProgressElement>("[data-recon-bar]")!;
-      bar.value = pct;
+      writeRecon("[data-recon-progress]", `${pct}%`);
+      const bar = content.querySelector<HTMLProgressElement>("[data-recon-bar]");
+      if (bar) bar.value = pct;
       const msg = optimization.message || (state.tracking === "lost" ? "Could not match features between images. Try adding more overlapping photos." : state.tracking === "idle" ? "Reconstruction complete." : "");
-      if (msg) content.querySelector<HTMLElement>("[data-recon-message]")!.textContent = msg;
+      if (msg) writeRecon("[data-recon-message]", msg);
     };
 
     content.querySelector<HTMLButtonElement>("[data-action='reconstruct']")?.addEventListener("click", () => void (async () => {
       if (activeBatchSession) return;
       reconPanel.hidden = false;
-      content.querySelector<HTMLElement>("[data-recon-message]")!.textContent = "Loading images…";
+      writeRecon("[data-recon-message]", "Loading images…");
       const imageData = await Promise.all(project.assets.map(async (a) => ({ data: await fetch(a.url).then((r) => r.arrayBuffer()), mediaType: a.type })));
-      if (disposed) return;
-      content.querySelector<HTMLElement>("[data-recon-message]")!.textContent = "Processing images…";
+      if (disposed || token !== routeToken) return;
+      writeRecon("[data-recon-message]", "Processing images…");
       activeBatchSession = startBatchReconstruct(
         imageData,
         {
           mapViewer,
-          onTelemetry(state) { if (!disposed) { updateReconTelemetry(state); if (state.tracking !== "idle") { const done = Math.round(state.progress * imageData.length); content.querySelector<HTMLElement>("[data-recon-message]")!.textContent = `Processing image ${done} of ${imageData.length}…`; } } },
-          onDone(session) {
+          onTelemetry(state) { if (disposed || token !== routeToken) return; updateReconTelemetry(state); if (state.tracking !== "idle") { const done = Math.round(state.progress * imageData.length); writeRecon("[data-recon-message]", `Processing image ${done} of ${imageData.length}…`); } },
+          onDone(session, frameToImage) {
             if (disposed) return;
             activeBatchSession = undefined;
-            content.querySelector<HTMLElement>("[data-recon-message]")!.textContent = `Reconstruction complete. ${session ? `${session.map.landmarks.length} points.` : ""}`;
+            writeRecon("[data-recon-message]", `Reconstruction complete. ${session ? `${session.map.landmarks.length} points.` : ""}`);
             if (session && session.map.landmarks.length > 0) {
-              const dlBtn = content.querySelector<HTMLButtonElement>("[data-action='download-recon-ply']")!;
-              dlBtn.hidden = false;
-              dlBtn.onclick = () => { const plyContent = exportPointCloudPly(session.map, session.poses); const blob = new Blob([plyContent], { type: "application/octet-stream" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `${project.name.replace(/\s+/g,"_")}.ply`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10_000); };
-              void service.attachPly(projectId, exportPointCloudPly(session.map, session.poses)).catch(() => {});
+              void (async () => {
+                writeRecon("[data-recon-message]", "Sampling point colors from source images…");
+                let colors: Map<string, readonly [number, number, number]> | undefined;
+                try { colors = await colorizeLandmarks(session, imageData, frameToImage); } catch { colors = undefined; }
+                // Save the point cloud before any DOM writes: the user may have
+                // navigated away while colors were sampled, and their scan must
+                // still end up attached to the project.
+                const plyContent = exportPointCloudPly(session.map, session.poses, colors);
+                void service.attachPly(projectId, plyContent).catch(() => {});
+                if (disposed || token !== routeToken) return;
+                writeRecon("[data-recon-message]", `Reconstruction complete. ${session.map.landmarks.length} points. Point cloud saved with this project.`);
+                const dlBtn = content.querySelector<HTMLButtonElement>("[data-action='download-recon-ply']");
+                if (!dlBtn) return;
+                dlBtn.hidden = false;
+                dlBtn.onclick = () => { const blob = new Blob([plyContent], { type: "application/octet-stream" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `${project.name.replace(/\s+/g,"_")}.ply`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 10_000); };
+              })();
             }
           },
-          onError(msg) { if (!disposed) { content.querySelector<HTMLElement>("[data-recon-message]")!.textContent = `Error: ${msg}`; activeBatchSession = undefined; } },
+          onError(msg) { if (disposed) return; activeBatchSession = undefined; writeRecon("[data-recon-message]", `Error: ${msg}`); },
         },
       );
     })());
@@ -373,12 +448,12 @@ export function mountStudioApp(root: HTMLElement, capabilities: CapabilityProfil
   }
 
   async function safeListProjects() { try { return await service.listProjects(); } catch { return []; } }
-  function dispose(): void { if (disposed) return; disposed = true; pendingSave?.dispose(); pendingSave = undefined; activeCapture?.dispose(); activeBatchSession?.cancel(); activeMapViewer?.dispose(); activeAssetUrls.forEach(URL.revokeObjectURL); window.removeEventListener("popstate", routeHandler); document.removeEventListener("click", onOutsideClick); document.removeEventListener("keydown", onEscapeKey); }
+  function dispose(): void { if (disposed) return; disposed = true; pendingSave?.dispose(); pendingSave = undefined; activeCapture?.dispose(); activeBatchSession?.cancel(); activeMapViewer?.dispose(); activeAssetUrls.forEach(URL.revokeObjectURL); window.removeEventListener("popstate", routeHandler); document.removeEventListener("click", onOutsideClick); document.removeEventListener("keydown", onEscapeKey); window.removeEventListener("unhandledrejection", onUnhandledRejection); window.removeEventListener("error", onWindowError); }
   return { dispose };
 }
 
 function parseRoute(pathname: string): { page: Page; projectId: string } { const [first, second] = pathname.replace(/^\/studio\/?/, "").split("/"); if (first === "projects" && second) return { page: "project", projectId: decodeURIComponent(second) }; if (first === "projects" || first === "import" || first === "capture" || first === "settings") return { page: first, projectId: "" }; return { page: "overview", projectId: "" }; }
-function projectGrid(projects: readonly { id: string; name: string; createdAt: string; updatedAt: string; assetIds: readonly string[] }[]): string { return `<div class="project-grid">${projects.map((project,index) => `<a class="project-card" href="/studio/projects/${encodeURIComponent(project.id)}" data-card-id="${escapeHTML(project.id)}"><div class="project-cover cover-${index % 3}"><div class="cover-orb" data-cover-orb></div><img class="project-thumb" data-thumb="${escapeHTML(project.id)}" aria-hidden="true" alt=""><span class="cover-label">${project.assetIds.length ? `${project.assetIds.length} SOURCE IMAGES` : "CAMERA CAPTURE"}</span><span class="cover-index">${String(index + 1).padStart(2,"0")}</span></div><div class="project-card-info"><div><h3>${escapeHTML(project.name)}</h3><p>Updated ${escapeHTML(new Date(project.updatedAt).toLocaleDateString())}</p></div><span class="project-arrow">↗</span></div></a>`).join("")}</div>`; }
+function projectGrid(projects: readonly { id: string; name: string; createdAt: string; updatedAt: string; assetIds: readonly string[] }[]): string { return `<div class="project-grid">${projects.map((project,index) => { const frames = project.assetIds.filter((id) => !id.includes(":ply:")).length; const scanned = project.assetIds.length !== frames; const label = frames ? `${frames} ${scanned ? "CAPTURED FRAMES" : "SOURCE IMAGES"}` : scanned ? "LIVE SCAN" : "EMPTY PROJECT"; return `<a class="project-card" href="/studio/projects/${encodeURIComponent(project.id)}" data-card-id="${escapeHTML(project.id)}"><div class="project-cover cover-${index % 3}"><div class="cover-orb" data-cover-orb></div><img class="project-thumb" data-thumb="${escapeHTML(project.id)}" aria-hidden="true" alt=""><span class="cover-label">${label}</span><span class="cover-index">${String(index + 1).padStart(2,"0")}</span></div><div class="project-card-info"><div><h3>${escapeHTML(project.name)}</h3><p>Updated ${escapeHTML(new Date(project.updatedAt).toLocaleDateString())}</p></div><span class="project-arrow">↗</span></div></a>`; }).join("")}</div>`; }
 function emptyProjects(): string { return `<div class="empty-state"><div class="empty-symbol">＋</div><h2>Your first project starts here</h2><p>Import a photo set from your computer or start a live camera capture.</p><div class="empty-actions"><a href="/studio/import" class="action-primary">Import images</a><a href="/studio/capture" class="action-secondary">Start a capture</a></div></div>`; }
 function inferName(files: readonly File[]): string { const first = files[0]!; const folder = (first as File & { webkitRelativePath?: string }).webkitRelativePath?.split("/")[0]; return folder || first.name.replace(/\.[^.]+$/, "") || "Imported project"; }
 function escapeHTML(value: string): string { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!); }

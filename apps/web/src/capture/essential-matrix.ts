@@ -49,13 +49,31 @@ function svd3(A: number[]): { U: number[]; S: number[]; V: number[] } {
   const Vout = [Vs[0]![0]!, Vs[1]![0]!, Vs[2]![0]!, Vs[0]![1]!, Vs[1]![1]!, Vs[2]![1]!, Vs[0]![2]!, Vs[1]![2]!, Vs[2]![2]!];
   const Ss = [S[order[0]!]!, S[order[1]!]!, S[order[2]!]!];
 
-  // U = A V diag(1/s), handle zero singular values
+  // U = A V diag(1/s), handle zero singular values. The tolerance is RELATIVE
+  // to σ₁: an exact essential matrix has σ₃ = 0, so whatever Jacobi reports
+  // there is numerical noise — on the order of 1e-10…1e-8 × σ₁ in practice. An
+  // absolute cutoff sits right inside that noise band: when a noisy σ₃ slips
+  // past it, A·v₃ (eigenvector noise, ~1e-6) is divided by ~1e-10 and the
+  // resulting third column of U is garbage of norm ~1e-4 — which silently
+  // turns the essential decomposition into t≈0 plus a rank-2 rotation, and
+  // every downstream triangulation gate rejects every point.
+  const rankTol = Ss[0]! * 1e-7;
   const U = identity3();
   const AV = mat3Mul(A, Vout);
   for (let c = 0; c < 3; c++) {
     const s = Ss[c]!;
-    if (s < 1e-10) continue;
+    if (s <= rankTol) continue;
     for (let r = 0; r < 3; r++) U[r * 3 + c] = AV[r * 3 + c]! / s;
+  }
+  // For a rank-deficient σ₃, u₃ is only defined up to sign; left unfilled it
+  // would silently stay at the identity default [0,0,1]. u₃ = u₁ × u₂
+  // completes the proper (det +1) basis.
+  if (Ss[2]! <= rankTol) {
+    const u1x = U[0]!, u1y = U[3]!, u1z = U[6]!;
+    const u2x = U[1]!, u2y = U[4]!, u2z = U[7]!;
+    U[2] = u1y * u2z - u1z * u2y;
+    U[5] = u1z * u2x - u1x * u2z;
+    U[8] = u1x * u2y - u1y * u2x;
   }
 
   return { U, S: Ss, V: Vout };
@@ -63,40 +81,78 @@ function svd3(A: number[]): { U: number[]; S: number[]; V: number[] } {
 
 // ── 8-point essential matrix ──────────────────────────────────────────────────
 
+/** Gaussian elimination with partial pivoting on a 9×9 system. */
+function solve9(M: readonly number[], b: readonly number[]): number[] | undefined {
+  const a = [...M];
+  const x = [...b];
+  for (let col = 0; col < 9; col++) {
+    let piv = col;
+    let pivVal = Math.abs(a[col * 9 + col]!);
+    for (let r = col + 1; r < 9; r++) {
+      const v = Math.abs(a[r * 9 + col]!);
+      if (v > pivVal) { pivVal = v; piv = r; }
+    }
+    if (pivVal < 1e-14) return undefined;
+    if (piv !== col) {
+      for (let c = col; c < 9; c++) { const t = a[col * 9 + c]!; a[col * 9 + c] = a[piv * 9 + c]!; a[piv * 9 + c] = t; }
+      const t = x[col]!; x[col] = x[piv]!; x[piv] = t;
+    }
+    for (let r = col + 1; r < 9; r++) {
+      const f = a[r * 9 + col]! / a[col * 9 + col]!;
+      if (f === 0) continue;
+      for (let c = col; c < 9; c++) a[r * 9 + c] = a[r * 9 + c]! - f * a[col * 9 + c]!;
+      x[r] = x[r]! - f * x[col]!;
+    }
+  }
+  const out = new Array<number>(9).fill(0);
+  for (let r = 8; r >= 0; r--) {
+    let s = x[r]!;
+    for (let c = r + 1; c < 9; c++) s -= a[r * 9 + c]! * out[c]!;
+    out[r] = s / a[r * 9 + r]!;
+  }
+  return out;
+}
+
 function nullspace9(A: readonly number[][], n: number): number[] {
   // AtA is 9x9, find smallest eigenvector via 20 iterations of inverse power
   // (shift by epsilon of Frobenius norm to regularize)
   const AtA = new Array<number>(81).fill(0);
   for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) for (let k = 0; k < n; k++) AtA[r * 9 + c] += A[k]![r]! * A[k]![c]!;
 
-  // Smallest eigenvector via deflation: remove the 8 largest then remainder is smallest
-  // Simpler: power iteration on (AtA)^{-1}. We'll just do Gram-Schmidt deflation.
-  // Actually: run power iteration on cofactor complement. Use random init + 40 iters.
-  // For stability: normalize AtA and use (I - AtA/lambda_max) power iteration.
+  // Smallest eigenvector via inverse iteration with a fixed tiny shift:
+  // repeatedly solving (AtA + shift·I)·w = v amplifies each eigencomponent by
+  // 1/(λᵢ+shift), so the null direction wins by orders of magnitude. Power
+  // iteration cannot separate λ8 from λ9≈0 on exact 8-point systems, and
+  // Rayleigh-quotient iteration locks onto whatever eigenvalue the start is
+  // nearest — both returned the wrong vector in practice.
   let norm2 = 0;
   for (const v of AtA) norm2 += v * v;
   const scale = Math.sqrt(norm2) || 1;
+  const shift = 1e-9 * scale;
+  const M = AtA.map((x, i) => (Math.floor(i / 9) === i % 9 ? x + shift : x));
 
-  // Compute approximate largest eigenvalue via one power iteration round
-  let v = new Array<number>(9).fill(0); v[0] = 1;
-  for (let iter = 0; iter < 8; iter++) {
-    const nv = new Array<number>(9).fill(0);
-    for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) nv[r] += AtA[r * 9 + c]! * v[c]!;
-    const nm = Math.hypot(...nv) || 1;
-    v = nv.map(x => x / nm);
-  }
-  const lambdaMax = v.reduce((s, vi, i) => s + vi * AtA[i * 9 + i]! * vi, 0) || scale;
+  const rayleigh = (vec: readonly number[]): number => {
+    let s = 0;
+    for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) s += vec[r]! * AtA[r * 9 + c]! * vec[c]!;
+    return s;
+  };
 
-  // Now iterate on (lambdaMax*I - AtA) to get smallest eigenvector
-  const B = AtA.map((x, i) => (Math.floor(i / 9) === i % 9 ? lambdaMax : 0) - x);
-  v = new Array<number>(9).fill(0); v[0] = 1;
-  for (let iter = 0; iter < 40; iter++) {
-    const nv = new Array<number>(9).fill(0);
-    for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) nv[r] += B[r * 9 + c]! * v[c]!;
-    const nm = Math.hypot(...nv) || 1;
-    v = nv.map(x => x / nm);
+  // Deterministic pseudo-random start — generic enough not to sit in an
+  // invariant subspace of AtA.
+  let v = Array.from({ length: 9 }, (_, i) => Math.sin(i * 2.7 + 1.3));
+  const n0 = Math.hypot(...v) || 1;
+  v = v.map((x) => x / n0);
+  let bestV = v;
+  let bestRho = rayleigh(v);
+  for (let iter = 0; iter < 30; iter++) {
+    const w = solve9(M, v);
+    if (!w) break;
+    const nw = Math.hypot(...w) || 1;
+    v = w.map((x) => x / nw);
+    const rho = rayleigh(v);
+    if (rho < bestRho) { bestRho = rho; bestV = v; }
   }
-  return v;
+  return bestV;
 }
 
 export function estimateEssentialMatrix(
@@ -128,6 +184,167 @@ export function estimateEssentialMatrix(
   return E;
 }
 
+// ── RANSAC wrapper ────────────────────────────────────────────────────────────
+
+export interface RobustEssentialResult {
+  readonly E: number[];
+  /** Per-point inlier mask, same length as input arrays */
+  readonly inliers: readonly boolean[];
+}
+
+export function epipolarErrors(E: readonly number[], pts1: readonly { x: number; y: number }[], pts2: readonly { x: number; y: number }[], intrinsics: CameraIntrinsics): number[] {
+  const { fx, fy, cx, cy } = intrinsics;
+  const errors = new Array<number>(pts1.length);
+  for (let i = 0; i < pts1.length; i++) {
+    const x1 = (pts1[i]!.x - cx) / fx, y1 = (pts1[i]!.y - cy) / fy;
+    const x2 = (pts2[i]!.x - cx) / fx, y2 = (pts2[i]!.y - cy) / fy;
+    // First-order transfer error (Fischler & Bolles): d ≈ |x2^T E x1| / sqrt(a²+b²)
+    // where a,b are first two components of E*x1 and E^T*x2 respectively
+    const e1 = [
+      E[0]! * x1 + E[1]! * y1 + E[2]!,
+      E[3]! * x1 + E[4]! * y1 + E[5]!,
+      E[6]! * x1 + E[7]! * y1 + E[8]!,
+    ];
+    const e2 = [
+      E[0]! * x2 + E[3]! * y2 + E[6]!,
+      E[1]! * x2 + E[4]! * y2 + E[7]!,
+      E[2]! * x2 + E[5]! * y2 + E[8]!,
+    ];
+    const xTEy = x2 * e1[0]! + y2 * e1[1]! + e1[2]!;
+    const denom = e1[0]! * e1[0]! + e1[1]! * e1[1]! + e2[0]! * e2[0]! + e2[1]! * e2[1]!;
+    errors[i] = denom > 1e-18 ? (xTEy * xTEy) / denom : Number.POSITIVE_INFINITY;
+  }
+  return errors;
+}
+
+/**
+ * RANSAC-fitted essential matrix. Samples random 8-point subsets, scores the
+ * epipolar constraint over all correspondences, refits on the best inlier set.
+ * Returns inlier mask so callers can drop outlier matches before triangulation.
+ */
+export function robustEstimateEssentialMatrix(
+  pts1: readonly { x: number; y: number }[],
+  pts2: readonly { x: number; y: number }[],
+  intrinsics: CameraIntrinsics,
+  options: { iterations?: number; thresholdPx?: number } = {},
+): RobustEssentialResult | undefined {
+  const n = Math.min(pts1.length, pts2.length);
+  if (n < 8) return undefined;
+  const iterations = options.iterations ?? 300;
+  // Squared threshold in normalized coordinates
+  const tNorm = (options.thresholdPx ?? 2.0) / Math.max(intrinsics.fx, 1);
+  const thresholdSq = tNorm * tNorm;
+
+  const sample = new Array<number>(8);
+  let bestCount = -1;
+  let bestSum = Number.POSITIVE_INFINITY;
+  let bestE: number[] | undefined;
+  let bestMask: boolean[] | undefined;
+
+  for (let iter = 0; iter < iterations; iter++) {
+    // Random 8 distinct indices
+    const used = new Set<number>();
+    for (let k = 0; k < 8; k++) {
+      let idx = Math.floor(Math.random() * n);
+      let guard = 0;
+      while (used.has(idx) && guard++ < 20) idx = (idx + 1) % n;
+      used.add(idx);
+      sample[k] = idx;
+    }
+    const s1 = sample.map((i) => pts1[i]!);
+    const s2 = sample.map((i) => pts2[i]!);
+    const E = estimateEssentialMatrix(s1, s2, intrinsics);
+    if (!E) continue;
+
+    const errors = epipolarErrors(E, pts1, pts2, intrinsics);
+    const mask = errors.map((e) => e <= thresholdSq);
+    let count = 0;
+    let sum = 0;
+    for (let i = 0; i < n; i++) if (mask[i]) { count++; sum += errors[i]!; }
+
+    // On small parallax (walking slowly, distant subject) several wrong models
+    // — e.g. "pure forward drift" — keep every match inside a generous pixel
+    // threshold, so the inlier COUNT alone cannot pick the winner: whichever
+    // degenerate model was sampled first stuck, and odometry silently slid
+    // along the optical axis while the scene barely parallaxed. Break ties by
+    // total inlier residual — the true model's errors sit at pixel-
+    // quantization noise, orders of magnitude below a near-miss impostor.
+    if (count > bestCount || (count === bestCount && count > 0 && sum < bestSum)) {
+      bestCount = count;
+      bestSum = sum;
+      bestE = E;
+      bestMask = mask;
+    }
+  }
+
+  if (!bestE || !bestMask || bestCount < 8) return undefined;
+
+  // Refit on inliers (linear-time improvement over the 8-point model). The
+  // algebraic LSQ is BIASED toward degenerate models at small parallax — on a
+  // slow walk it happily returns "camera slid forward" with the same inlier
+  // count as the true lateral motion but visibly worse residuals — so the
+  // refit must EARN its place: only keep it when it is not worse than the
+  // sampled winner on inlier count and total geometric error.
+  const idx1: { x: number; y: number }[] = [];
+  const idx2: { x: number; y: number }[] = [];
+  for (let i = 0; i < n; i++) if (bestMask[i]) { idx1.push(pts1[i]!); idx2.push(pts2[i]!); }
+  const refit = (idx1.length >= 8 ? estimateEssentialMatrix(idx1, idx2, intrinsics) : undefined) ?? bestE;
+
+  // Final inlier pass on the refit model
+  const finalErrors = epipolarErrors(refit, pts1, pts2, intrinsics);
+  const finalMask = finalErrors.map((e) => e <= thresholdSq);
+  let finalCount = 0;
+  let finalSum = 0;
+  for (let i = 0; i < n; i++) if (finalMask[i]) { finalCount++; finalSum += finalErrors[i]!; }
+  if (finalCount < 8) return { E: bestE, inliers: bestMask };
+  if (finalCount === bestCount && finalSum > bestSum) return { E: bestE, inliers: bestMask };
+
+  return { E: refit, inliers: finalMask };
+}
+
+/**
+ * Essential matrix for a known camera-pose pair.
+ * Convention: poses are world-to-camera (X_cam = R (X_world - C)).
+ * Returns E such that x2^T E x1 = 0 for normalized coords in each camera.
+ */
+export function essentialFromPoses(pose1: CameraPose, pose2: CameraPose): number[] {
+  const R1 = pose1.rotation, R2 = pose2.rotation, C1 = pose1.translation, C2 = pose2.translation;
+  // R_rel = R2 * R1^T
+  const Rrel = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) Rrel[r * 3 + c] = R2[r * 3]! * R1[c * 3]! + R2[r * 3 + 1]! * R1[c * 3 + 1]! + R2[r * 3 + 2]! * R1[c * 3 + 2]!;
+  // t_rel = R2 * (C1 - C2)
+  const d = [C1[0]! - C2[0]!, C1[1]! - C2[1]!, C1[2]! - C2[2]!];
+  const tx = R2[0]! * d[0]! + R2[1]! * d[1]! + R2[2]! * d[2]!;
+  const ty = R2[3]! * d[0]! + R2[4]! * d[1]! + R2[5]! * d[2]!;
+  const tz = R2[6]! * d[0]! + R2[7]! * d[1]! + R2[8]! * d[2]!;
+  // E = [t]x * Rrel
+  const txmat = [0, -tz, ty, tz, 0, -tx, -ty, tx, 0];
+  return mat3Mul(txmat, Rrel);
+}
+
+/**
+ * E from a relative pose pair, same slot values the estimator carries:
+ * rotation = R₂R₁ᵀ, translation = R₂(C₁−C₂). (Essential matrices ignore the
+ * length of t, so any scaled t gives the same epipolar geometry.)
+ */
+export function essentialFromRelativePose(rotation: readonly number[], translation: readonly number[]): number[] {
+  const [tx, ty, tz] = [translation[0]!, translation[1]!, translation[2]!];
+  return mat3Mul([0, -tz, ty, tz, 0, -tx, -ty, tx, 0], [...rotation]);
+}
+
+/** Indices of points whose first-order transfer error is within thresholdPx. */
+export function epipolarInlierMask(
+  E: readonly number[],
+  pts1: readonly { x: number; y: number }[],
+  pts2: readonly { x: number; y: number }[],
+  intrinsics: CameraIntrinsics,
+  thresholdPx = 2.5,
+): boolean[] {
+  // Errors are squared normalized-coordinate distances; threshold in same units
+  const tNorm = thresholdPx / Math.max(intrinsics.fx, 1);
+  return epipolarErrors(E, pts1, pts2, intrinsics).map((e) => e <= tNorm * tNorm);
+}
+
 // ── Decompose E into 4 [R, t] candidates ─────────────────────────────────────
 
 const W = [0, -1, 0, 1, 0, 0, 0, 0, 1]; // Hartley W matrix
@@ -138,14 +355,17 @@ export function decomposeEssentialMatrix(E: number[]): Array<{ rotation: CameraP
   const t1 = [U[2]!, U[5]!, U[8]!] as [number, number, number];
   const t2 = [-U[2]!, -U[5]!, -U[8]!] as [number, number, number];
 
-  const R1raw = mat3Mul(U, mat3Mul(W, mat3T(V)));
-  const R2raw = mat3Mul(U, mat3Mul(Wt, mat3T(V)));
-
-  // Ensure det(R) = +1
+  // det(U W Vᵀ) = det(U)·det(W)·det(V) with det(W) = det(Wᵀ) = +1, so both
+  // rotations are proper exactly when det(V) = det(U). Flipping V's third
+  // column enforces that WITHOUT touching the (R, t) pairing — negating a
+  // whole improper R (the previous fixDet) yields −R, a different
+  // 180°-offset rotation that no longer agrees with t, and cheirality happily
+  // scores the inconsistent pair.
   const det = (R: number[]) => R[0]! * (R[4]! * R[8]! - R[5]! * R[7]!) - R[1]! * (R[3]! * R[8]! - R[5]! * R[6]!) + R[2]! * (R[3]! * R[7]! - R[4]! * R[6]!);
-  const fixDet = (R: number[]) => det(R) < 0 ? R.map(x => -x) : R;
-  const R1 = fixDet(R1raw) as unknown as CameraPose["rotation"];
-  const R2 = fixDet(R2raw) as unknown as CameraPose["rotation"];
+  const Vc = det(U) * det(V) < 0 ? [V[0]!, V[1]!, -V[2]!, V[3]!, V[4]!, -V[5]!, V[6]!, V[7]!, -V[8]!] : V;
+
+  const R1 = mat3Mul(U, mat3Mul(W, mat3T(Vc))) as unknown as CameraPose["rotation"];
+  const R2 = mat3Mul(U, mat3Mul(Wt, mat3T(Vc))) as unknown as CameraPose["rotation"];
 
   return [
     { rotation: R1, translation: t1 },
@@ -210,6 +430,10 @@ export function selectPoseByCheirality(
   let bestScore = -1;
 
   for (const candidate of candidates) {
+    // t comes from a unit column of U; a short one means the decomposition was
+    // fed something degenerate — scoring it would "select" a pose built from
+    // pure noise.
+    if (Math.hypot(...candidate.translation) < 0.5) continue;
     let score = 0;
     const sampleSize = Math.min(pts1.length, 20);
     for (let i = 0; i < sampleSize; i++) {

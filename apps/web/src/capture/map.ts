@@ -9,7 +9,11 @@ export class LocalMap {
   private readonly keyframes = new Map<string, Keyframe>();
   private version = 0;
   addKeyframe(keyframe: Keyframe): void { if (this.keyframes.has(keyframe.id)) throw new Error(`Keyframe ${keyframe.id} already exists.`); if (!validateKeyframe(keyframe)) throw new Error("Invalid keyframe."); this.keyframes.set(keyframe.id, cloneKeyframe(keyframe)); this.version += 1; }
-  upsertLandmark(id: string, point: Pick<TriangulatedPoint, "x" | "y" | "z">, frameIndex: number): Landmark { const previous = this.landmarks.get(id); const next: Landmark = { id, x: previous ? (previous.x + point.x) / 2 : point.x, y: previous ? (previous.y + point.y) / 2 : point.y, z: previous ? (previous.z + point.z) / 2 : point.z, observations: (previous?.observations ?? 0) + 1, lastSeenFrame: frameIndex }; if (!validateLandmark(next)) throw new Error("Invalid landmark."); this.landmarks.set(id, next); this.version += 1; return next; }
+  /** Insert or merge a triangulated point. `viewCount` is how many camera
+   * views produced this update — a keyframe pair triangulates from two, so
+   * a freshly created landmark is already two-view-triangulated, which is
+   * what the export gate (observations >= 2) checks against. */
+  upsertLandmark(id: string, point: Pick<TriangulatedPoint, "x" | "y" | "z">, frameIndex: number, viewCount = 1): Landmark { const previous = this.landmarks.get(id); const next: Landmark = { id, x: previous ? (previous.x + point.x) / 2 : point.x, y: previous ? (previous.y + point.y) / 2 : point.y, z: previous ? (previous.z + point.z) / 2 : point.z, observations: (previous?.observations ?? 0) + viewCount, lastSeenFrame: frameIndex }; if (!validateLandmark(next)) throw new Error("Invalid landmark."); this.landmarks.set(id, next); this.version += 1; return next; }
   getLandmark(id: string): Landmark | undefined { return this.landmarks.get(id); }
   getKeyframe(id: string): Keyframe | undefined { return this.keyframes.get(id); }
   landmarkCount(): number { return this.landmarks.size; }

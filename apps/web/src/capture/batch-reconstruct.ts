@@ -7,11 +7,14 @@ import type { ScanFrame } from "./live-scan";
 import type { CaptureTelemetry } from "./capture-app";
 import type { PointCloudViewer } from "./point-cloud-viewer";
 import type { ReconstructionSessionSnapshot } from "./reconstruction-session";
+import { defaultIntrinsics } from "./geometry";
 
 export interface BatchReconstructOptions {
   readonly mapViewer?: PointCloudViewer;
   readonly onTelemetry: (state: CaptureTelemetry) => void;
-  readonly onDone: (session: ReconstructionSessionSnapshot | undefined) => void;
+  /** frameToImage maps pipeline frameIndex → index into the input images array
+   * (rejected frames shift the two), so a colorizer can find the source pixels. */
+  readonly onDone: (session: ReconstructionSessionSnapshot | undefined, frameToImage: readonly number[]) => void;
   readonly onError: (message: string) => void;
 }
 
@@ -39,7 +42,7 @@ export function startBatchReconstruct(
       // Use first image to derive intrinsics estimate
       const firstBitmap = await decodeImageData(images[0]!);
       const width = firstBitmap.width; const height = firstBitmap.height;
-      const intrinsics = { fx: width * 0.9, fy: width * 0.9, cx: width / 2, cy: height / 2 };
+      const intrinsics = defaultIntrinsics(width, height);
       const poseEstimator = new LocalPoseEstimator({ intrinsics, extractor, matcher });
 
       workerFactory = createBrowserReconstructionWorker();
@@ -56,7 +59,7 @@ export function startBatchReconstruct(
             optimizationBridge = new ReconstructionOptimizationBridge(controller, {
               debounceMs: 500, minimumIntervalMs: 1500,
               onState: (s) => { state.optimization = s.phase; state.progress = imageProgress; state.iteration = s.iteration; state.totalIterations = s.totalIterations; state.cost = s.cost; state.initialCost = s.initialCost; state.improvement = s.improvement; options.onTelemetry({ ...state }); },
-              onResult: () => {},
+              onResult: (result) => { if (result.committed && result.output) processor?.applyOptimizedSession(result.output.candidate); },
               onError: () => {},
             });
             processor?.setOptimizationBridge(optimizationBridge);
@@ -66,17 +69,21 @@ export function startBatchReconstruct(
 
       state.tracking = "tracking"; options.onTelemetry({ ...state });
 
+      const frameToImage: number[] = [];
       for (let i = 0; i < images.length; i++) {
         if (cancelled) return;
         const imageData = await decodeImageData(images[i]!);
         const frame: ScanFrame = { timestampMs: i * 100, image: imageData };
-        await processor.process(frame);
+        const accepted = await processor.process(frame);
+        // The processor only advances its frameIndex for accepted frames, so
+        // record which image each accepted frame came from.
+        if (accepted) frameToImage.push(i);
         imageProgress = (i + 1) / images.length;
         state.progress = imageProgress;
         options.onTelemetry({ ...state });
       }
 
-      if (!cancelled) { state.tracking = "idle"; options.onTelemetry({ ...state }); options.onDone(processor?.snapshot()); }
+      if (!cancelled) { state.tracking = "idle"; options.onTelemetry({ ...state }); options.onDone(processor?.snapshot(), frameToImage); }
     } catch (error) {
       if (!cancelled) options.onError(error instanceof Error ? error.message : "Reconstruction failed.");
     } finally {
@@ -96,17 +103,12 @@ export function startBatchReconstruct(
   };
 }
 
-async function decodeImageData(image: { data: ArrayBuffer; mediaType: string }): Promise<ImageData> {
+export async function decodeImageData(image: { data: ArrayBuffer; mediaType: string }): Promise<ImageData> {
   const blob = new Blob([image.data], { type: image.mediaType });
-  const url = URL.createObjectURL(blob);
-  try {
-    const bitmap = await createImageBitmap(blob);
-    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-    const ctx = canvas.getContext("2d")!;
-    ctx.drawImage(bitmap, 0, 0);
-    bitmap.close();
-    return ctx.getImageData(0, 0, canvas.width, canvas.height);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  const bitmap = await createImageBitmap(blob);
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  return ctx.getImageData(0, 0, canvas.width, canvas.height);
 }

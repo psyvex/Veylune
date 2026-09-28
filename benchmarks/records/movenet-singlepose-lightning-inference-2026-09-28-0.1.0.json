@@ -1,0 +1,26 @@
+{
+  "benchmarkId": "movenet-singlepose-lightning-inference",
+  "benchmarkVersion": "1",
+  "fixtureId": "none — synthetic mid-gray tensor, not a benchmarks/fixtures/ image fixture",
+  "fixtureVersion": "n/a",
+  "veyluneVersion": "0.1.0",
+  "engineVersion": "0.1.0",
+  "modelIds": ["movenet-singlepose-lightning"],
+  "modelDigests": ["sha256:5021097f4e9a4be612f2feb1d7d998f4a07b2ab3dbee0e8717e059c00315587f"],
+  "browserOrRuntime": "onnxruntime-web 1.30.0 Node/WASM backend, node v24.21.0, darwin/arm64",
+  "executionBackend": "wasm",
+  "qualityTier": "preview",
+  "date": "2026-09-28",
+  "summary": {
+    "samples": 10,
+    "successful": 10,
+    "p50Ms": 45.8,
+    "p95Ms": 45.8
+  },
+  "notes": [
+    "Produced by tools/verify-model-inference.mjs against the real downloaded artifact (digest-checked first), not fabricated.",
+    "This is a Node/WASM developer-machine number, explicitly NOT a target-device or real-browser (WebGPU) benchmark — see model-card.md's 'What is still unverified' item 2.",
+    "Session creation (model load) took ~255ms, excluded from the steady-state p50/p95 above; 1 warmup run was also excluded.",
+    "qualityTier is 'preview' because this ran on the WASM backend with no GPU acceleration, the lowest of the four tiers this repo defines."
+  ]
+}

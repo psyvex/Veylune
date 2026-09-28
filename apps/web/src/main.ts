@@ -1,8 +1,8 @@
-import { detectCapabilities, toEngineCapabilities } from "./runtime/capabilities";
+import { detectCapabilities } from "./runtime/capabilities";
 import { mountStudioApp } from "./studio/studio-app";
 import { mountMarketingPage } from "./marketing/marketing-page";
 import { mountVeyluneSplash } from "./branding/splash";
-import { enginePreferredBackend, engineVersion, loadEngine } from "./engine/index.js";
+import { applyEngineCapabilityAttributes } from "./engine/capability-attributes.js";
 import "./design/tokens.css";
 import "./design/components.css";
 import "./branding/voxel-bloom.css";
@@ -21,13 +21,18 @@ root.dataset.workers = capabilities.workers;
 // Load the Rust/WASM engine (ADR-013) and record which backend it selects for
 // this browser, so the capability profile is visible end to end from Rust
 // runtime logic through to a DOM attribute, per Phase 0's acceptance criteria.
-void loadEngine().then(() => {
-  root.dataset.engineVersion = engineVersion();
-  root.dataset.enginePreferredBackend = enginePreferredBackend(
-    toEngineCapabilities(capabilities),
-    "balanced",
-  );
-});
+// See capability-attributes.test.ts for the integration test covering this hop.
+void applyEngineCapabilityAttributes(root, capabilities);
+// Offline shell (public/sw.js): production only — a registered SW would serve
+// stale bundles from the dev server. All project data already lives in
+// IndexedDB, so caching the bundle is what makes the app usable offline.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    // ?v=<build id> — a new URL is a new service worker to the browser, so
+    // every deploy installs, activates and deletes the previous cache.
+    void navigator.serviceWorker.register(`/sw.js?v=${__VEYLUNE_BUILD__}`, { scope: "/" }).catch(() => undefined);
+  });
+}
 if (/^\/studio(\/|$)/.test(window.location.pathname)) {
   // The app mounts first and the splash covers it, so the sequence hides work
   // that is already happening instead of delaying it. Ordering it this way also

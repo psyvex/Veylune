@@ -151,6 +151,66 @@ mod tests {
     }
 
     #[test]
+    fn release_gives_back_reserved_budget_saturating_at_zero() {
+        let budget = ResourceBudget::new(100, 100, ResourceClass::Small);
+        let mut job = JobController::new(1, budget);
+        job.start().unwrap();
+        job.reserve(90, 30).unwrap(); // reserved = (90, 30)
+        // Without release, a further 20 would exceed the 100 memory budget.
+        assert_eq!(job.reserve(20, 0), Err(RuntimeError::ResourceLimitExceeded));
+        job.release(70, 0); // reserved = (20, 30) — 80 memory now free
+        assert_eq!(job.reserve(80, 0), Ok(())); // exactly fills the budget now
+        job.release(1000, 1000); // saturating: never underflows past zero
+        assert_eq!(job.reserve(100, 100), Ok(())); // budget is fully free again
+    }
+
+    #[test]
+    fn cannot_start_a_job_that_is_not_queued() {
+        let budget = ResourceBudget::new(100, 100, ResourceClass::Small);
+        let mut job = JobController::new(1, budget);
+        job.start().unwrap();
+        assert_eq!(job.start(), Err(RuntimeError::InvalidTransition));
+    }
+
+    #[test]
+    fn request_cancel_from_queued_goes_straight_to_cancelled() {
+        let budget = ResourceBudget::new(100, 100, ResourceClass::Small);
+        let mut job = JobController::new(1, budget);
+        assert_eq!(job.request_cancel(), Ok(()));
+        assert_eq!(job.status().state, JobState::Cancelled);
+    }
+
+    #[test]
+    fn complete_step_reports_cancelled_once_cancellation_is_requested() {
+        let budget = ResourceBudget::new(100, 100, ResourceClass::Small);
+        let mut job = JobController::new(2, budget);
+        job.start().unwrap();
+        job.request_cancel().unwrap();
+        assert_eq!(job.complete_step(), Err(RuntimeError::Cancelled));
+    }
+
+    #[test]
+    fn fail_transitions_running_or_cancelling_to_failed_but_not_other_states() {
+        let budget = ResourceBudget::new(100, 100, ResourceClass::Small);
+        let mut running = JobController::new(1, budget);
+        running.start().unwrap();
+        assert_eq!(running.fail(), Ok(()));
+        assert_eq!(running.status().state, JobState::Failed);
+
+        let mut queued = JobController::new(1, budget);
+        assert_eq!(queued.fail(), Err(RuntimeError::InvalidTransition));
+    }
+
+    #[test]
+    fn reserve_rejects_a_request_that_exceeds_the_budget_or_overflows() {
+        let budget = ResourceBudget::new(100, 100, ResourceClass::Small);
+        let mut job = JobController::new(1, budget);
+        job.start().unwrap();
+        assert_eq!(job.reserve(101, 0), Err(RuntimeError::ResourceLimitExceeded));
+        assert_eq!(job.reserve(0, u64::MAX), Err(RuntimeError::ResourceLimitExceeded));
+    }
+
+    #[test]
     fn capability_selection_remains_unchanged() {
         let profile = CapabilityProfile {
             webgpu: true,

@@ -226,3 +226,85 @@ describe("Studio identity", () => {
     expect(glyph.textContent?.trim()).toBe("");
   });
 });
+
+let restoreStorage: (() => void) | undefined;
+afterEach(() => { restoreStorage?.(); restoreStorage = undefined; });
+
+function withStorage(storage: Record<string, unknown>): void {
+  const original = Object.getOwnPropertyDescriptor(navigator, "storage");
+  Object.defineProperty(navigator, "storage", { configurable: true, value: storage });
+  restoreStorage = () => {
+    if (original) Object.defineProperty(navigator, "storage", original);
+    else delete (navigator as { storage?: unknown }).storage;
+  };
+}
+
+const GB = 1024 * 1024 * 1024;
+
+describe("Storage durability", () => {
+  it("warns when data is unprotected and the disk is nearly full", async () => {
+    withStorage({
+      persist: () => Promise.resolve(false),
+      estimate: () => Promise.resolve({ usage: GB - 60 * 1024 * 1024, quota: GB }),
+    });
+    const root = document.createElement("div");
+    document.body.append(root);
+    dispose = mountStudioApp(root, capabilities).dispose;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const toast = document.querySelector<HTMLElement>(".error-toast");
+    expect(toast?.textContent).toContain("nearly full");
+    expect(toast?.textContent).toContain("60.0 MB");
+  });
+
+  it("stays quiet when the browser promises to keep the data", async () => {
+    withStorage({
+      persist: () => Promise.resolve(true),
+      estimate: () => Promise.resolve({ usage: GB - 60 * 1024 * 1024, quota: GB }),
+    });
+    const root = document.createElement("div");
+    document.body.append(root);
+    dispose = mountStudioApp(root, capabilities).dispose;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(document.querySelector(".error-toast")).toBeNull();
+  });
+
+  it("stays quiet on unprotected browsers with room to spare (iOS with space)", async () => {
+    // No persist/estimate at all — jsdom-like browsers must not crash or toast.
+    withStorage({});
+    const root = document.createElement("div");
+    document.body.append(root);
+    dispose = mountStudioApp(root, capabilities).dispose;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(document.querySelector(".error-toast")).toBeNull();
+  });
+
+  it("Preferences states whether the browser will keep the data", async () => {
+    withStorage({
+      persisted: () => Promise.resolve(false),
+      estimate: () => Promise.resolve({ usage: 1024 * 1024, quota: 10 * GB }),
+    });
+    const root = document.createElement("div");
+    document.body.append(root);
+    dispose = mountStudioApp(root, capabilities).dispose;
+    navigateTo("/studio/settings");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(root.querySelector("[data-storage-persistence]")?.textContent).toContain("may free this data");
+  });
+
+  it("Preferences reports protected storage as protected", async () => {
+    withStorage({
+      persisted: () => Promise.resolve(true),
+      estimate: () => Promise.resolve({ usage: 1024 * 1024, quota: 10 * GB }),
+    });
+    const root = document.createElement("div");
+    document.body.append(root);
+    dispose = mountStudioApp(root, capabilities).dispose;
+    navigateTo("/studio/settings");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(root.querySelector("[data-storage-persistence]")?.textContent).toContain("Protected from automatic browser cleanup");
+  });
+});

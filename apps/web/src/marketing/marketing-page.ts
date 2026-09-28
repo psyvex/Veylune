@@ -155,7 +155,7 @@ function renderPipeline(): string {
 }
 
 function renderPrivacy(): string {
-  return `<section class="privacy-section section-reveal" id="privacy"><div class="privacy-art"><div class="privacy-mark" data-identity>${voxelBloomSvg({ state: "bloom", ambient: true })}</div><div class="privacy-data data-a">LOCAL STORAGE <b>ACTIVE</b></div><div class="privacy-data data-b">SOURCE FILES <b>ON DEVICE</b></div></div><div class="privacy-copy">${renderEyebrow("PRIVATE BY DEFAULT")}<h2>Your source files<br>stay <em>with you.</em></h2><p>Images and project records are stored in this browser on your device. Veylune’s workspace is designed around local access and visible control.</p>${renderUnderlinedLink("/studio/import", "Create a private project")}</div></section>`;
+  return `<section class="privacy-section section-reveal" id="privacy"><div class="privacy-art"><div class="privacy-mark" data-identity>${voxelBloomSvg({ state: "bloom", ambient: true })}</div><div class="privacy-data data-a">LOCAL STORAGE <b>ACTIVE</b></div><div class="privacy-data data-b">SOURCE FILES <b>ON DEVICE</b></div></div><div class="privacy-copy">${renderEyebrow("PRIVATE BY DEFAULT")}<h2>Your source files<br>stay <em>with you.</em></h2><p>Images and project records are stored in this browser on your device. No account, no uploads, no telemetry — once the app has loaded, it keeps working with the screen off the network entirely.</p><p class="privacy-disclosure">Browsers manage their own storage budget and may discard it when the disk runs full, so download the scans you care about as PLY files — they are yours to keep anywhere.</p>${renderUnderlinedLink("/studio/import", "Create a private project")}</div></section>`;
 }
 
 function renderClosing(): string {

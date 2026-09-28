@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { Landmark } from "./map";
 import type { BundleAdjustmentObservation } from "./bundle-adjustment";
 
@@ -6,16 +8,26 @@ export interface SyntheticFixture {
   readonly observations: readonly BundleAdjustmentObservation[];
 }
 
-export function createSyntheticOptimizationFixture(): SyntheticFixture {
-  const landmarks: Landmark[] = [
-    { id: "p0", x: -1, y: -1, z: 4, observations: 3, lastSeenFrame: 2 },
-    { id: "p1", x: 1, y: -1, z: 4, observations: 3, lastSeenFrame: 2 },
-    { id: "p2", x: -1, y: 1, z: 5, observations: 3, lastSeenFrame: 2 },
-    { id: "p3", x: 1, y: 1, z: 5, observations: 3, lastSeenFrame: 2 },
-  ];
-  const observations = landmarks.flatMap((point) => [
-    { landmarkId: point.id, cameraId: "c0", observedX: point.x, observedY: point.y },
-    { landmarkId: point.id, cameraId: "c1", observedX: point.x + 0.01, observedY: point.y - 0.01 },
-  ]);
-  return { landmarks, observations };
+interface FixtureFile {
+  readonly fixtureId: string;
+  readonly version: string;
+  readonly landmarks: readonly Landmark[];
+  readonly observations: readonly BundleAdjustmentObservation[];
+}
+
+/**
+ * Loads the checked-in synthetic bundle-adjustment fixture from
+ * `benchmarks/fixtures/` (per `docs/23-benchmark-contract.md`'s "fixture
+ * version" reproducibility field), instead of hardcoding the same numbers
+ * inline in this module — the same data can now be a reviewable, versioned
+ * artifact that a future benchmark record can cite by `fixtureId`/`version`.
+ * Node-only (reads the file off disk directly, like `engine/node-loader.ts`);
+ * this fixture is dev/test tooling, never imported by the shipped browser
+ * bundle.
+ */
+export async function loadSyntheticOptimizationFixture(): Promise<SyntheticFixture> {
+  const path = join(process.cwd(), "..", "..", "benchmarks", "fixtures", "bundle-adjustment-synthetic-v1.json");
+  const bytes = await readFile(path);
+  const file = JSON.parse(new TextDecoder("utf-8").decode(bytes)) as FixtureFile;
+  return { landmarks: file.landmarks, observations: file.observations };
 }

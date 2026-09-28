@@ -1,5 +1,7 @@
 import type { CameraIntrinsics } from "./geometry";
 import type { Keypoint, FeatureMatch } from "./features";
+import { engineTriangulatePoints } from "../engine/index.js";
+import { isReconstructionEngineReady } from "./reconstruction-engine-bootstrap.js";
 
 export interface CameraPose {
   readonly rotation: readonly [number, number, number, number, number, number, number, number, number];
@@ -41,11 +43,17 @@ function midpointTriangulate(r1: ReturnType<typeof unprojectRay>, r2: ReturnType
   const { ox: o2x, oy: o2y, oz: o2z, dx: d2x, dy: d2y, dz: d2z } = r2;
   const d1d2 = d1x * d2x + d1y * d2y + d1z * d2z;
   const denom = 1 - d1d2 * d1d2;
-  if (Math.abs(denom) < 1e-8) return undefined; // parallel rays
+  // Parallax floor, not just an exact-parallel guard: rays meeting at 0.001
+  // rad "solve" to a point hundreds of baselines away with a tiny
+  // reprojection error — garbage that passes every other gate. Below ~0.29°
+  // of intersection angle the depth is noise, so refuse the vertex. (Real
+  // keyframe baselines parallax at 1-3°+; a degraded odometry pose is what
+  // produces sub-degree "intersections".)
+  if (denom < 2.5e-5) return undefined; // sin(0.29°)²
   const w = [o2x - o1x, o2y - o1y, o2z - o1z];
   const t1 = (w[0]! * d1x + w[1]! * d1y + w[2]! * d1z - d1d2 * (w[0]! * d2x + w[1]! * d2y + w[2]! * d2z)) / denom;
   const t2 = (d1d2 * (w[0]! * d1x + w[1]! * d1y + w[2]! * d1z) - (w[0]! * d2x + w[1]! * d2y + w[2]! * d2z)) / denom;
-  if (t1 < 0.01) return undefined; // point must be in front of reference camera
+  if (t1 < 0.01 || t2 < 0.01) return undefined; // point must be in front of BOTH cameras
   return {
     x: (o1x + d1x * t1 + o2x + d2x * t2) / 2,
     y: (o1y + d1y * t1 + o2y + d2y * t2) / 2,
@@ -103,4 +111,64 @@ export function triangulateCorrespondences(
     accepted: points.length >= 4 && medianReprojectionErrorPx <= maxReprojectionErrorPx,
     medianReprojectionErrorPx,
   };
+}
+
+/** Shared by both branches of {@link triangulateCorrespondencesRouted} —
+ * the median/`accepted` aggregate over whatever points survived, identical
+ * to `triangulateCorrespondences`'s tail. */
+function aggregateTriangulationResult(points: readonly TriangulatedPoint[], maxReprojectionErrorPx: number): TriangulationResult {
+  const errors = points.map((point) => point.reprojectionErrorPx).sort((a, b) => a - b);
+  const medianReprojectionErrorPx = errors.length === 0
+    ? Number.POSITIVE_INFINITY
+    : errors.length % 2 === 0
+      ? (errors[errors.length / 2 - 1]! + errors[errors.length / 2]!) / 2
+      : errors[Math.floor(errors.length / 2)]!;
+  return {
+    points,
+    accepted: points.length >= 4 && medianReprojectionErrorPx <= maxReprojectionErrorPx,
+    medianReprojectionErrorPx,
+  };
+}
+
+/**
+ * Routes `triangulateCorrespondences`'s per-match core to a single
+ * `engineTriangulatePoints` call (ADR-013, Stage 1) — one WASM call for the
+ * whole match list instead of one per match (see `triangulate_points`'s
+ * Rust module doc). The keypoint-lookup/skip-missing step
+ * (`reference[match.referenceIndex]`/`current[match.currentIndex]`) stays
+ * TS, same as every other routed function here: it's indexing into arrays
+ * by match metadata, not math. Falls back to the pure-TS
+ * `triangulateCorrespondences` when the engine isn't ready.
+ */
+export function triangulateCorrespondencesRouted(
+  reference: readonly Keypoint[],
+  current: readonly Keypoint[],
+  matches: readonly FeatureMatch[],
+  intrinsics: CameraIntrinsics,
+  referencePose: CameraPose,
+  currentPose: CameraPose,
+  maxReprojectionErrorPx = 2,
+): TriangulationResult {
+  if (!isReconstructionEngineReady()) return triangulateCorrespondences(reference, current, matches, intrinsics, referencePose, currentPose, maxReprojectionErrorPx);
+  if (matches.length === 0 || intrinsics.fx <= 0 || intrinsics.fy <= 0) {
+    return { points: [], accepted: false, medianReprojectionErrorPx: Number.POSITIVE_INFINITY };
+  }
+
+  const keptMatches: FeatureMatch[] = [];
+  const pixelPairs: number[] = [];
+  for (const match of matches) {
+    const a = reference[match.referenceIndex];
+    const b = current[match.currentIndex];
+    if (!a || !b) continue;
+    keptMatches.push(match);
+    pixelPairs.push(a.x, a.y, b.x, b.y);
+  }
+  if (keptMatches.length === 0) return { points: [], accepted: false, medianReprojectionErrorPx: Number.POSITIVE_INFINITY };
+
+  const results = engineTriangulatePoints(intrinsics, referencePose, currentPose, Float64Array.from(pixelPairs), maxReprojectionErrorPx);
+  const points: TriangulatedPoint[] = [];
+  results.forEach((result, i) => {
+    if (result) points.push({ x: result.x, y: result.y, z: result.z, reprojectionErrorPx: result.reprojectionErrorPx, match: keptMatches[i]! });
+  });
+  return aggregateTriangulationResult(points, maxReprojectionErrorPx);
 }

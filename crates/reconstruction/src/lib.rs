@@ -2,6 +2,12 @@
 
 use veylune_core::{Confidence, EvidenceState};
 
+pub mod bundle_block_assembly;
+pub mod bundle_linearization;
+pub mod bundle_optimizer;
+pub mod robust_loss;
+pub mod schur_block_solve;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReconstructionStage {
     Analysis,

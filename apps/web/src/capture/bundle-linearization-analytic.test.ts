@@ -15,6 +15,29 @@ const problem: BundleProblem = {
   observations: [{ cameraId: camera.id, landmarkId: landmark.id, observedX: 301, observedY: 218 }],
 };
 
+/**
+ * `camera.pose.translation` is the camera's world-space CENTER (see
+ * reprojection.ts's projectPoint), so its Gauss-Newton perturbation is a
+ * plain world-frame add (`C + delta`) — NOT `applySE3Increment`'s SE3
+ * group update (`ΔR*C + Δt`), which is correct only for a standard
+ * world-to-camera `t`. A rotation-only perturbation must hold the center
+ * fixed (only `R` changes); `applySE3Increment` also rotates the
+ * translation it's given, so it's only safe to reuse here for the
+ * rotation-only case by feeding it a zero translation and re-attaching the
+ * real (unrotated) center afterward.
+ */
+function perturbCamera(component: "rotation" | "translation", index: number, sign: 1 | -1, epsilon: number): CameraBlock {
+  if (component === "rotation") {
+    const rotationStep: [number, number, number] = [0, 0, 0];
+    rotationStep[index] = sign * epsilon;
+    const rotated = applySE3Increment(camera.pose.rotation, [0, 0, 0], { rotation: rotationStep, translation: [0, 0, 0] });
+    return { ...camera, pose: { rotation: rotated.rotation, translation: camera.pose.translation } };
+  }
+  const translation = [...camera.pose.translation] as [number, number, number];
+  translation[index] += sign * epsilon;
+  return { ...camera, pose: { rotation: camera.pose.rotation, translation } };
+}
+
 describe("analytic bundle linearization", () => {
   it("matches centered finite differences for camera and landmark parameters with distortion", () => {
     const analytic = linearizeBundle(problem).observations[0]!;
@@ -23,14 +46,10 @@ describe("analytic bundle linearization", () => {
     for (let column = 0; column < 6; column += 1) {
       const component = column < 3 ? "rotation" : "translation";
       const index = column % 3;
-      const plusIncrement = { rotation: [0, 0, 0] as [number, number, number], translation: [0, 0, 0] as [number, number, number] };
-      const minusIncrement = { rotation: [0, 0, 0] as [number, number, number], translation: [0, 0, 0] as [number, number, number] };
-      plusIncrement[component][index] = epsilon;
-      minusIncrement[component][index] = -epsilon;
-      const plusPose = applySE3Increment(camera.pose.rotation, camera.pose.translation, plusIncrement);
-      const minusPose = applySE3Increment(camera.pose.rotation, camera.pose.translation, minusIncrement);
-      const plus = residual({ ...problem, cameras: [{ ...camera, pose: plusPose }] });
-      const minus = residual({ ...problem, cameras: [{ ...camera, pose: minusPose }] });
+      const plusCamera = perturbCamera(component, index, 1, epsilon);
+      const minusCamera = perturbCamera(component, index, -1, epsilon);
+      const plus = residual({ ...problem, cameras: [plusCamera] });
+      const minus = residual({ ...problem, cameras: [minusCamera] });
       expect(analytic.cameraJacobian[column * 2]).toBeCloseTo((plus[0] - minus[0]) / (2 * epsilon), 4);
       expect(analytic.cameraJacobian[column * 2 + 1]).toBeCloseTo((plus[1] - minus[1]) / (2 * epsilon), 4);
     }

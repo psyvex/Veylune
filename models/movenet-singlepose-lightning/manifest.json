@@ -1,0 +1,45 @@
+{
+  "modelId": "movenet-singlepose-lightning",
+  "version": "1.0.0-int8",
+  "artifactDigest": "sha256:5021097f4e9a4be612f2feb1d7d998f4a07b2ab3dbee0e8717e059c00315587f",
+  "sourceUri": "https://huggingface.co/Xenova/movenet-singlepose-lightning/resolve/main/onnx/model_quantized.onnx",
+  "license": "Apache-2.0",
+  "modelCardUri": "models/movenet-singlepose-lightning/model-card.md",
+  "supportedBackends": ["wasm", "wasm-simd", "webgpu"],
+  "inputSchema": {
+    "name": "input",
+    "shape": [1, 192, 192, 3],
+    "dtype": "int32",
+    "layout": "NHWC",
+    "channelOrder": "RGB",
+    "normalization": "none — MoveNet's own graph does the [0,255] -> model-internal scaling; do not pre-normalize.",
+    "_verifiedNote": "dtype corrected from an initial uint8 guess to int32 after actually running this exact artifact through onnxruntime-web (Node/WASM) on 2026-09-28 — the graph rejects tensor(uint8) with ERROR_CODE 2 and requires tensor(int32). See model-card.md."
+  },
+  "outputSchema": {
+    "name": "output_0",
+    "shape": [1, 1, 17, 3],
+    "dtype": "float32",
+    "description": "17 COCO keypoints, each [y, x, score], y/x normalized to [0,1] against the 192x192 input.",
+    "keypointOrder": [
+      "nose", "left_eye", "right_eye", "left_ear", "right_ear",
+      "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+      "left_wrist", "right_wrist", "left_hip", "right_hip",
+      "left_knee", "right_knee", "left_ankle", "right_ankle"
+    ]
+  },
+  "preprocessingVersion": "1.0.0",
+  "postprocessingVersion": "1.0.0",
+  "minimumCapabilityTier": "preview",
+  "knownLimitations": [
+    "Single-person only — does not detect or separate multiple people in frame.",
+    "Trained/tuned for a person roughly centered and mostly visible in the 192x192 crop; heavy occlusion or extreme crop degrades keypoint confidence sharply.",
+    "int8 quantized artifact: lower keypoint precision than the fp32/fp16 variants at the same input; not yet benchmarked against them in this repo.",
+    "Provides 2D image-plane keypoints only — no depth, no 3D pose, no camera-relative scale.",
+    "This is a community ONNX re-export (Xenova/movenet-singlepose-lightning) of Google's MoveNet, not Google's own artifact — behavior should be re-verified against the original TF Hub model if discrepancies are suspected."
+  ],
+  "evaluationDataset": {
+    "id": "none",
+    "version": "unevaluated"
+  },
+  "approvalStatus": "candidate"
+}

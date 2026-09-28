@@ -9,6 +9,23 @@
 //! the ported bundle-adjustment/triangulation/SE3 pipeline.
 
 use veylune_core::{Confidence, EvidenceState, PROJECT_SCHEMA_VERSION};
+use veylune_geometry::distortion::{
+    project_distorted_point, project_distorted_point_with_jacobian, RadialTangentialDistortion,
+};
+use veylune_geometry::linear_solve::{solve_positive_definite, DenseLinearSystem};
+use veylune_geometry::reprojection::{project_point, reprojection_error_px, CameraPose};
+use veylune_geometry::se3::{apply_se3_increment, so3_exp, Se3Increment};
+use veylune_geometry::sparse_normal_equations::accumulate_normal_equations;
+use veylune_geometry::triangulation::{triangulate_point, triangulate_points};
+use veylune_geometry::CameraIntrinsics;
+use veylune_geometry::vector::clamp_vector;
+use veylune_reconstruction::bundle_block_assembly::{assemble_bundle_blocks, AssemblyObservation};
+use veylune_reconstruction::bundle_linearization::{linearize_observation, linearize_observations, ObservationInput};
+use veylune_reconstruction::bundle_optimizer::{
+    apply_camera_steps, apply_landmark_steps, bundle_cost, prepare_bundle_adjustment, predict_reduction, BundleAdjustmentStatus,
+};
+use veylune_reconstruction::robust_loss::HuberLoss;
+use veylune_reconstruction::schur_block_solve::{solve_bundle_schur_blocks, BlockMatrix, SchurBlocks, SchurStatus};
 use veylune_reconstruction::{ReconstructionProgress, ReconstructionStage};
 use veylune_runtime::{CapabilityProfile, ExecutionBackend, QualityTier};
 use wasm_bindgen::prelude::*;
@@ -180,6 +197,533 @@ pub fn reconstruction_progress_fraction(completed_steps: u32, total_steps: u32) 
         total_steps,
     }
     .fraction()
+}
+
+/// `so3Exp` from `apps/web/src/capture/se3.ts`, ported per ADR-013. Takes
+/// `omega` as `[x, y, z]` and returns the row-major 3x3 rotation as 9 floats
+/// — arrays cross the WASM boundary as plain `Vec<f64>` rather than a
+/// bindgen struct, since this is a parity-test target, not yet a wired
+/// caller (see `docs/75-production-task-pipeline.md` Stage 1).
+#[wasm_bindgen]
+pub fn so3_exp_wasm(omega: Vec<f64>) -> Vec<f64> {
+    let omega: Vec3 = [omega[0], omega[1], omega[2]];
+    so3_exp(omega).to_vec()
+}
+
+type Vec3 = [f64; 3];
+type Mat3 = [f64; 9];
+
+fn to_vec3(v: &[f64]) -> Vec3 {
+    [v[0], v[1], v[2]]
+}
+fn to_mat3(m: &[f64]) -> Mat3 {
+    let mut out: Mat3 = [0.0; 9];
+    out.copy_from_slice(&m[..9]);
+    out
+}
+
+/// `applySE3Increment` from `se3.ts`, ported per ADR-013. Returns the 9
+/// rotation floats followed by the 3 translation floats (12 total).
+#[wasm_bindgen]
+pub fn apply_se3_increment_wasm(
+    rotation: Vec<f64>,
+    translation: Vec<f64>,
+    increment_rotation: Vec<f64>,
+    increment_translation: Vec<f64>,
+) -> Vec<f64> {
+    let (next_rotation, next_translation) = apply_se3_increment(
+        to_mat3(&rotation),
+        to_vec3(&translation),
+        Se3Increment { rotation: to_vec3(&increment_rotation), translation: to_vec3(&increment_translation) },
+    );
+    let mut out = next_rotation.to_vec();
+    out.extend_from_slice(&next_translation);
+    out
+}
+
+fn intrinsics_of(fx: f64, fy: f64, cx: f64, cy: f64) -> CameraIntrinsics {
+    CameraIntrinsics { fx, fy, cx, cy }
+}
+fn distortion_of(k1: f64, k2: f64, k3: f64, p1: f64, p2: f64) -> RadialTangentialDistortion {
+    RadialTangentialDistortion { k1, k2, k3, p1, p2 }
+}
+fn pose_of(rotation: &[f64], translation: &[f64]) -> CameraPose {
+    CameraPose { rotation: to_mat3(rotation), translation: to_vec3(translation) }
+}
+
+/// `projectDistortedPoint` from `distortion.ts` (ADR-013 Stage 1). Empty
+/// result means the point was invalid (behind the camera or non-finite),
+/// matching the TS `undefined` return.
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn project_distorted_point_wasm(
+    point: Vec<f64>,
+    fx: f64, fy: f64, cx: f64, cy: f64,
+    k1: f64, k2: f64, k3: f64, p1: f64, p2: f64,
+) -> Vec<f64> {
+    match project_distorted_point(
+        [point[0], point[1], point[2]],
+        intrinsics_of(fx, fy, cx, cy),
+        distortion_of(k1, k2, k3, p1, p2),
+    ) {
+        Some(p) => p.to_vec(),
+        None => vec![],
+    }
+}
+
+/// `projectDistortedPointWithJacobian` from `distortion.ts` (ADR-013 Stage
+/// 1). Returns `[pixel_x, pixel_y, j0..j5]` (8 floats), or empty when
+/// invalid.
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn project_distorted_point_with_jacobian_wasm(
+    point: Vec<f64>,
+    fx: f64, fy: f64, cx: f64, cy: f64,
+    k1: f64, k2: f64, k3: f64, p1: f64, p2: f64,
+) -> Vec<f64> {
+    match project_distorted_point_with_jacobian(
+        [point[0], point[1], point[2]],
+        intrinsics_of(fx, fy, cx, cy),
+        distortion_of(k1, k2, k3, p1, p2),
+    ) {
+        Some(result) => {
+            let mut out = result.pixel.to_vec();
+            out.extend_from_slice(&result.jacobian);
+            out
+        }
+        None => vec![],
+    }
+}
+
+/// `projectPoint` from `reprojection.ts` (ADR-013 Stage 1). Returns
+/// `[x, y, valid]` with `valid` as `1.0`/`0.0`.
+#[wasm_bindgen]
+pub fn project_point_wasm(
+    point: Vec<f64>,
+    fx: f64, fy: f64, cx: f64, cy: f64,
+    rotation: Vec<f64>,
+    translation: Vec<f64>,
+) -> Vec<f64> {
+    let projected = project_point(
+        [point[0], point[1], point[2]],
+        intrinsics_of(fx, fy, cx, cy),
+        pose_of(&rotation, &translation),
+    );
+    vec![projected.x, projected.y, if projected.valid { 1.0 } else { 0.0 }]
+}
+
+/// `reprojectionErrorPx` from `reprojection.ts` (ADR-013 Stage 1).
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn reprojection_error_px_wasm(
+    observed: Vec<f64>,
+    point: Vec<f64>,
+    fx: f64, fy: f64, cx: f64, cy: f64,
+    rotation: Vec<f64>,
+    translation: Vec<f64>,
+) -> f64 {
+    reprojection_error_px(
+        [observed[0], observed[1]],
+        [point[0], point[1], point[2]],
+        intrinsics_of(fx, fy, cx, cy),
+        pose_of(&rotation, &translation),
+    )
+}
+
+/// `solvePositiveDefinite` from `linear-solve.ts` (ADR-013 Stage 1). `matrix`
+/// is row-major `size x size`. Empty result means the TS `undefined` case
+/// (non-positive-definite, malformed dimensions, or non-finite result).
+#[wasm_bindgen]
+pub fn solve_positive_definite_wasm(size: usize, matrix: Vec<f64>, rhs: Vec<f64>) -> Vec<f64> {
+    solve_positive_definite(&DenseLinearSystem { size, matrix, rhs }).unwrap_or_default()
+}
+
+/// `accumulateNormalEquations` from `sparse-normal-equations.ts` (ADR-013
+/// Stage 1). `jacobian_flat` is `rows * size` row-major; `rows`/`size` give
+/// its shape (a `Vec<Vec<f64>>` can't cross the WASM boundary directly).
+/// Encodes the result as a flat `Vec<f64>` since returning a struct would
+/// need a bindgen type just for this parity test:
+/// `[size, gradient(size floats), entryCount, (row, column, value) * entryCount]`.
+/// Empty result means the TS `throw` case (dimension mismatch or an
+/// invalid row) — the caller should treat that as an error, same as the TS
+/// exception.
+#[wasm_bindgen]
+pub fn accumulate_normal_equations_wasm(
+    jacobian_flat: Vec<f64>,
+    rows: usize,
+    size: usize,
+    residuals: Vec<f64>,
+    weights: Vec<f64>,
+) -> Vec<f64> {
+    let jacobian_rows: Vec<Vec<f64>> = jacobian_flat.chunks(size.max(1)).take(rows).map(|c| c.to_vec()).collect();
+    match accumulate_normal_equations(&jacobian_rows, &residuals, &weights) {
+        Ok(system) => {
+            let mut out = vec![system.size as f64];
+            out.extend_from_slice(&system.gradient);
+            out.push(system.entries.len() as f64);
+            for entry in system.entries {
+                out.push(entry.row as f64);
+                out.push(entry.column as f64);
+                out.push(entry.value);
+            }
+            out
+        }
+        Err(_) => vec![],
+    }
+}
+
+/// `triangulateCorrespondences`'s per-match core from `triangulation.ts`
+/// (ADR-013 Stage 1) — see `crates/geometry/src/triangulation.rs`'s module
+/// doc for why only the per-point math is ported, not the match-list loop.
+/// Empty result means the TS `undefined`/skip case; otherwise
+/// `[x, y, z, reprojectionErrorPx]`.
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn triangulate_point_wasm(
+    fx: f64, fy: f64, cx: f64, cy: f64,
+    reference_rotation: Vec<f64>, reference_translation: Vec<f64>,
+    current_rotation: Vec<f64>, current_translation: Vec<f64>,
+    reference_px: f64, reference_py: f64,
+    current_px: f64, current_py: f64,
+    max_reprojection_error_px: f64,
+) -> Vec<f64> {
+    let result = triangulate_point(
+        intrinsics_of(fx, fy, cx, cy),
+        pose_of(&reference_rotation, &reference_translation),
+        pose_of(&current_rotation, &current_translation),
+        (reference_px, reference_py),
+        (current_px, current_py),
+        max_reprojection_error_px,
+    );
+    match result {
+        Some(p) => vec![p.x, p.y, p.z, p.reprojection_error_px],
+        None => vec![],
+    }
+}
+
+/// `HuberLoss.rhoSquared` from `robust-loss.ts` (ADR-013 Stage 1). Returns
+/// `NaN` for an invalid `delta` (non-finite or non-positive) — the TS
+/// constructor throws in that case; a WASM boundary sentinel is simpler
+/// than threading a `Result` through bindgen for a parity-test-only export.
+#[wasm_bindgen]
+pub fn huber_rho_squared_wasm(delta: f64, residual_squared: f64) -> f64 {
+    match HuberLoss::new(delta) {
+        Some(loss) => loss.rho_squared(residual_squared),
+        None => f64::NAN,
+    }
+}
+
+/// `HuberLoss.weight` from `robust-loss.ts` (ADR-013 Stage 1). Same
+/// invalid-`delta` sentinel as {@link huber_rho_squared_wasm}.
+#[wasm_bindgen]
+pub fn huber_weight_wasm(delta: f64, residual_squared: f64) -> f64 {
+    match HuberLoss::new(delta) {
+        Some(loss) => loss.weight(residual_squared),
+        None => f64::NAN,
+    }
+}
+
+fn block_matrix_of(rows: usize, columns: usize, values: Vec<f64>) -> BlockMatrix {
+    BlockMatrix { rows, columns, values }
+}
+
+/// `solveBundleSchurBlocks` from `schur-block-solve.ts` (ADR-013 Stage 1) —
+/// the Schur-complement solve `bundle-optimizer.ts` actually calls. Encodes
+/// the result as `[statusCode, cameraStep(cameraSize), landmarkStep(landmarkSize)]`
+/// where `statusCode` is `0` = insufficient, `1` = singular, `2` = solved.
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn solve_bundle_schur_blocks_wasm(
+    camera_size: usize,
+    camera_values: Vec<f64>,
+    camera_landmark_values: Vec<f64>,
+    landmark_size: usize,
+    landmark_values: Vec<f64>,
+    camera_gradient: Vec<f64>,
+    landmark_gradient: Vec<f64>,
+    damping: f64,
+) -> Vec<f64> {
+    let blocks = SchurBlocks {
+        camera: block_matrix_of(camera_size, camera_size, camera_values),
+        camera_landmark: block_matrix_of(camera_size, landmark_size, camera_landmark_values),
+        landmark: block_matrix_of(landmark_size, landmark_size, landmark_values),
+        camera_gradient,
+        landmark_gradient,
+    };
+    let result = solve_bundle_schur_blocks(&blocks, damping);
+    let status_code = match result.status {
+        SchurStatus::Insufficient => 0.0,
+        SchurStatus::Singular => 1.0,
+        SchurStatus::Solved => 2.0,
+    };
+    let mut out = vec![status_code];
+    out.extend(result.camera_step);
+    out.extend(result.landmark_step);
+    out
+}
+
+/// `linearizeObservation` from `bundle-linearization.ts` (ADR-013 Stage 1)
+/// — the per-observation core `linearizeBundle`'s `BundleProblem` loop
+/// calls, ported alone per the same orchestration-stays-TS rule as
+/// `schur_block_solve.rs`. Encodes the result as a flat `Vec<f64>`:
+/// `[residual(2), weight(1), cameraJacobian(12), landmarkJacobian(6), valid(1 as 1.0/0.0)]`
+/// (22 floats total).
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn linearize_observation_wasm(
+    fx: f64, fy: f64, cx: f64, cy: f64,
+    k1: f64, k2: f64, k3: f64, p1: f64, p2: f64,
+    camera_rotation: Vec<f64>, camera_translation: Vec<f64>,
+    camera_fixed: bool,
+    landmark: Vec<f64>,
+    observed: Vec<f64>,
+    weight: f64,
+) -> Vec<f64> {
+    let result = linearize_observation(
+        intrinsics_of(fx, fy, cx, cy),
+        distortion_of(k1, k2, k3, p1, p2),
+        pose_of(&camera_rotation, &camera_translation),
+        camera_fixed,
+        [landmark[0], landmark[1], landmark[2]],
+        [observed[0], observed[1]],
+        weight,
+    );
+    let mut out = result.residual.to_vec();
+    out.push(result.weight);
+    out.extend_from_slice(&result.camera_jacobian);
+    out.extend_from_slice(&result.landmark_jacobian);
+    out.push(if result.valid { 1.0 } else { 0.0 });
+    out
+}
+
+/// `predictReduction` from `bundle-optimizer.ts` (ADR-013 Stage 1). All
+/// matrix arguments are row-major flat arrays; sizes are implied by
+/// `camera_step`/`landmark_step` lengths, matching the TS function's own
+/// `.length`-based indexing.
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn predict_reduction_wasm(
+    camera_gradient: Vec<f64>,
+    camera_hessian: Vec<f64>,
+    landmark_gradient: Vec<f64>,
+    landmark_hessian: Vec<f64>,
+    camera_landmark: Vec<f64>,
+    camera_step: Vec<f64>,
+    landmark_step: Vec<f64>,
+) -> f64 {
+    let camera_size = camera_step.len();
+    let landmark_size = landmark_step.len();
+    predict_reduction(
+        &camera_gradient,
+        &block_matrix_of(camera_size, camera_size, camera_hessian),
+        &landmark_gradient,
+        &block_matrix_of(landmark_size, landmark_size, landmark_hessian),
+        &block_matrix_of(camera_size, landmark_size, camera_landmark),
+        &camera_step,
+        &landmark_step,
+    )
+}
+
+/// `bundleCost`'s per-residual accumulation from `bundle-optimizer.ts`
+/// (ADR-013 Stage 1) — takes already-computed residuals/weights, not a
+/// `BundleProblem` (see `bundle_optimizer.rs`'s module doc). `residuals` is
+/// flat `[x0, y0, valid0 as 1.0/0.0, x1, y1, valid1, ...]`. Returns `NaN`
+/// for an invalid `huberDelta`, the same sentinel convention as
+/// `huber_rho_squared_wasm`.
+#[wasm_bindgen]
+pub fn bundle_cost_wasm(residuals: Vec<f64>, weights: Vec<f64>, huber_delta: f64) -> f64 {
+    let triples: Vec<(f64, f64, bool)> = residuals.chunks(3).map(|c| (c[0], c[1], c[2] == 1.0)).collect();
+    bundle_cost(&triples, &weights, huber_delta).unwrap_or(f64::NAN)
+}
+
+/// `clampVector` from `bundle-optimizer.ts` (ADR-013 Stage 1).
+#[wasm_bindgen]
+pub fn clamp_vector_wasm(vector: Vec<f64>, max_norm: f64) -> Vec<f64> {
+    clamp_vector(&vector, max_norm)
+}
+
+/// `prepareBundleAdjustment` from `bundle-adjustment.ts` (ADR-013 Stage 1).
+/// Returns `true` for `"not-run"` (sufficient data), `false` for
+/// `"insufficient"`.
+#[wasm_bindgen]
+pub fn prepare_bundle_adjustment_wasm(landmark_count: usize, observation_count: usize) -> bool {
+    prepare_bundle_adjustment(landmark_count, observation_count) == BundleAdjustmentStatus::NotRun
+}
+
+/// The camera-array half of `applyBundleStep` from `bundle-optimizer.ts`
+/// (ADR-013 Stage 1), batched into a single WASM call regardless of camera
+/// count — see `apply_camera_steps`'s module doc for why. `rotations`/
+/// `translations` are flat, 9/3 floats per camera, in the caller's
+/// `cameraIds` order; `camera_step` is flat `[rotation(3), translation(3)]`
+/// per camera in the same order. Returns the same layout as `rotations`
+/// followed by the same layout as `translations` (rotations first, all of
+/// them, then all translations) — `12 * cameraCount` floats total.
+#[wasm_bindgen]
+pub fn apply_camera_steps_wasm(
+    rotations: Vec<f64>,
+    translations: Vec<f64>,
+    camera_step: Vec<f64>,
+    max_rotation_step: f64,
+    max_translation_step: f64,
+) -> Vec<f64> {
+    let camera_count = translations.len() / 3;
+    let rotation_blocks: Vec<[f64; 9]> = rotations.chunks(9).take(camera_count).map(|c| { let mut m = [0.0; 9]; m.copy_from_slice(c); m }).collect();
+    let translation_blocks: Vec<[f64; 3]> = translations.chunks(3).take(camera_count).map(|c| [c[0], c[1], c[2]]).collect();
+    let results = apply_camera_steps(&rotation_blocks, &translation_blocks, &camera_step, max_rotation_step, max_translation_step);
+    let mut out = Vec::with_capacity(camera_count * 12);
+    for r in &results { out.extend_from_slice(&r.rotation); }
+    for r in &results { out.extend_from_slice(&r.translation); }
+    out
+}
+
+/// The landmark-array half of `applyBundleStep` (ADR-013 Stage 1), same
+/// batching rationale. `landmarks`/`landmark_step` are flat, 3 floats per
+/// landmark, in the caller's `landmarkIds` order. Returns the updated
+/// landmark positions in the same flat layout.
+#[wasm_bindgen]
+pub fn apply_landmark_steps_wasm(landmarks: Vec<f64>, landmark_step: Vec<f64>, max_landmark_step: f64) -> Vec<f64> {
+    let landmark_blocks: Vec<[f64; 3]> = landmarks.chunks(3).map(|c| [c[0], c[1], c[2]]).collect();
+    let results = apply_landmark_steps(&landmark_blocks, &landmark_step, max_landmark_step);
+    let mut out = Vec::with_capacity(results.len() * 3);
+    for r in &results { out.extend_from_slice(r); }
+    out
+}
+
+/// Batched `linearizeObservation` from `bundle-linearization.ts` (ADR-013
+/// Stage 1) — one WASM call for a whole observation list instead of one
+/// call per observation, matching the batching rationale in
+/// `linearize_observations`'s Rust module doc. Every `*_flat` array is one
+/// observation's worth of values concatenated `count` times, in the same
+/// order across all arrays (`count` is taken from `weight_flat.len()`).
+/// `camera_fixed_flat` is `1.0`/`0.0` per observation (no bool `Vec` to
+/// keep every parameter the same `Vec<f64>` type). Output is `count` rows
+/// of the same 22-float layout `linearize_observation_wasm` uses for one
+/// observation, concatenated in input order.
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn linearize_observations_batch_wasm(
+    intrinsics_flat: Vec<f64>,
+    distortion_flat: Vec<f64>,
+    camera_rotation_flat: Vec<f64>,
+    camera_translation_flat: Vec<f64>,
+    camera_fixed_flat: Vec<f64>,
+    landmark_flat: Vec<f64>,
+    observed_flat: Vec<f64>,
+    weight_flat: Vec<f64>,
+) -> Vec<f64> {
+    let count = weight_flat.len();
+    let inputs: Vec<ObservationInput> = (0..count)
+        .map(|i| ObservationInput {
+            intrinsics: intrinsics_of(intrinsics_flat[i * 4], intrinsics_flat[i * 4 + 1], intrinsics_flat[i * 4 + 2], intrinsics_flat[i * 4 + 3]),
+            distortion: distortion_of(
+                distortion_flat[i * 5], distortion_flat[i * 5 + 1], distortion_flat[i * 5 + 2], distortion_flat[i * 5 + 3], distortion_flat[i * 5 + 4],
+            ),
+            camera_pose: pose_of(&camera_rotation_flat[i * 9..i * 9 + 9], &camera_translation_flat[i * 3..i * 3 + 3]),
+            camera_fixed: camera_fixed_flat[i] == 1.0,
+            landmark: [landmark_flat[i * 3], landmark_flat[i * 3 + 1], landmark_flat[i * 3 + 2]],
+            observed: [observed_flat[i * 2], observed_flat[i * 2 + 1]],
+            weight: weight_flat[i],
+        })
+        .collect();
+    let results = linearize_observations(&inputs);
+    let mut out = Vec::with_capacity(count * 22);
+    for result in &results {
+        out.extend_from_slice(&result.residual);
+        out.push(result.weight);
+        out.extend_from_slice(&result.camera_jacobian);
+        out.extend_from_slice(&result.landmark_jacobian);
+        out.push(if result.valid { 1.0 } else { 0.0 });
+    }
+    out
+}
+
+/// Batched `triangulateCorrespondences`'s per-match core from
+/// `triangulation.ts` (ADR-013 Stage 1) — one WASM call for a whole
+/// correspondence list instead of one per match, matching the batching
+/// rationale in `triangulate_points`'s Rust module doc. `pixel_pairs` is
+/// flat `[reference_px, reference_py, current_px, current_py]` per
+/// correspondence, `count` pairs total. Output is `count` rows of `[valid
+/// (1.0/0.0), x, y, z, reprojectionErrorPx]` (5 floats each) — `valid` first
+/// so a rejected pair's other four floats can be read as `0` without the
+/// caller needing a separate "was this rejected" pass.
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn triangulate_points_wasm(
+    fx: f64, fy: f64, cx: f64, cy: f64,
+    reference_rotation: Vec<f64>, reference_translation: Vec<f64>,
+    current_rotation: Vec<f64>, current_translation: Vec<f64>,
+    pixel_pairs: Vec<f64>,
+    max_reprojection_error_px: f64,
+) -> Vec<f64> {
+    let count = pixel_pairs.len() / 4;
+    let pairs: Vec<(f64, f64, f64, f64)> = (0..count).map(|i| (pixel_pairs[i * 4], pixel_pairs[i * 4 + 1], pixel_pairs[i * 4 + 2], pixel_pairs[i * 4 + 3])).collect();
+    let results = triangulate_points(
+        intrinsics_of(fx, fy, cx, cy),
+        pose_of(&reference_rotation, &reference_translation),
+        pose_of(&current_rotation, &current_translation),
+        &pairs,
+        max_reprojection_error_px,
+    );
+    let mut out = Vec::with_capacity(count * 5);
+    for result in &results {
+        match result {
+            Some(p) => out.extend_from_slice(&[1.0, p.x, p.y, p.z, p.reprojection_error_px]),
+            None => out.extend_from_slice(&[0.0, 0.0, 0.0, 0.0, 0.0]),
+        }
+    }
+    out
+}
+
+/// Batched `assembleBundleBlocks` from `bundle-block-assembly.ts` (ADR-013
+/// Stage 1) — one WASM call for the whole observation list instead of one
+/// per observation (see `assemble_bundle_blocks`'s Rust module doc,
+/// including the pre-existing fixed-camera-skip quirk it ports faithfully).
+/// `observations_flat` is `23` floats per observation:
+/// `[cameraIndex (-1 for none), landmarkIndex, residual(2), weight(1),
+/// cameraJacobian(12), landmarkJacobian(6)]`, count taken from
+/// `observations_flat.len() / 23`. Output is empty for an invalid
+/// `huberDelta`; otherwise flat
+/// `[camera.values(cameraSize²), cameraLandmark.values(cameraSize*landmarkSize),
+/// landmark.values(landmarkSize²), cameraGradient(cameraSize), landmarkGradient(landmarkSize)]`
+/// — the caller already knows `camera_count`/`landmark_count`, so no header is needed.
+#[wasm_bindgen]
+pub fn assemble_bundle_blocks_wasm(
+    observations_flat: Vec<f64>,
+    camera_count: usize,
+    landmark_count: usize,
+    damping: f64,
+    huber_delta: f64,
+) -> Vec<f64> {
+    let observations: Vec<AssemblyObservation> = observations_flat
+        .chunks(23)
+        .map(|row| AssemblyObservation {
+            camera_index: if row[0] < 0.0 { None } else { Some(row[0] as usize) },
+            landmark_index: row[1] as usize,
+            residual: [row[2], row[3]],
+            weight: row[4],
+            camera_jacobian: {
+                let mut j = [0.0; 12];
+                j.copy_from_slice(&row[5..17]);
+                j
+            },
+            landmark_jacobian: {
+                let mut j = [0.0; 6];
+                j.copy_from_slice(&row[17..23]);
+                j
+            },
+        })
+        .collect();
+    match assemble_bundle_blocks(&observations, camera_count, landmark_count, damping, huber_delta) {
+        Some(blocks) => {
+            let mut out = blocks.camera.values;
+            out.extend(blocks.camera_landmark.values);
+            out.extend(blocks.landmark.values);
+            out.extend(blocks.camera_gradient);
+            out.extend(blocks.landmark_gradient);
+            out
+        }
+        None => vec![],
+    }
 }
 
 #[cfg(test)]

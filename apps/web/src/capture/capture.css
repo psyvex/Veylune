@@ -293,6 +293,52 @@ button:disabled { cursor: not-allowed; opacity: .42; }
   line-height: 1.6;
 }
 
+/* ── Point-cloud viewer toolbar + expanded view ────────────
+   The viewer (point-cloud-viewer.ts) builds these itself, so the styles
+   live here for both the capture stage and Studio's recon map. Chips are
+   deliberately dark-surfaced: they sit over the #0b0d0b stage, not the
+   light glass panels. */
+.pcv-toolbar {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+  max-width: calc(100% - 12px);
+}
+.pcv-btn {
+  width: 26px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 8px;
+  background: rgb(10 12 10 / 0.55);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #e8eae2;
+  font: 500 12px/1 ui-monospace, "SF Mono", Menlo, monospace;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.pcv-btn:hover:not(:disabled) { background: rgb(10 12 10 / 0.78); border-color: rgb(255 255 255 / 0.28); }
+.pcv-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 55%, rgb(10 12 10 / 0.6)); border-color: var(--accent); }
+.pcv-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+/* Expanded: the stage floats over the whole page (Escape or ⤡ closes it).
+   Attribute-selector rule after the stage's height so it wins the cascade. */
+[data-pcv-expanded="true"] {
+  position: fixed;
+  inset: 10px;
+  z-index: 70;
+  height: auto;
+  border-radius: 16px;
+  box-shadow: 0 30px 80px -20px rgb(0 0 0 / 0.65);
+}
+
 /* Refinement panel */
 .refinement-panel {
   padding: 16px;
@@ -407,6 +453,8 @@ button:disabled { cursor: not-allowed; opacity: .42; }
   .capabilities-strip { grid-column: auto; }
   .capture-metrics-strip { grid-template-columns: repeat(2, 1fr); }
 }
+.scale-note { margin: 8px 0 0; font-size: 9px; line-height: 1.45; color: var(--muted); text-align: center; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }

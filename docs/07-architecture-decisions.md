@@ -130,6 +130,80 @@ added on top of the TS math.
 - `apps/web/src/capture/` retains orchestration, worker/session management,
   guidance/HUD, and UI-facing state, calling into the WASM bridge for math.
 
+## ADR-014 — `CameraPose.translation` is the camera's world-space center
+
+**Decision:** Every consumer of `CameraPose` (`{ rotation, translation }`)
+treats `translation` as the camera's position in world space — a point,
+`C` — and projects a world point `P` into camera space as `q = R·(P − C)`.
+This is now enforced consistently across `triangulation.ts`,
+`essential-matrix.ts`, `local-pose-estimator.ts`, `reprojection.ts`,
+`bundle-problem.ts`, and `bundle-linearization.ts` (TS), and their Rust
+ports in `crates/geometry`/`crates/reconstruction`.
+
+**Context:** Found 2026-09-28 while building a WASM parity-test fixture for
+`triangulateCorrespondences`: projecting points the way `reprojection.ts`
+does (`q = R·P + t`, the standard world-to-camera translation) silently
+rejected every triangulated point. `triangulation.ts`'s `unprojectRay` and
+`essential-matrix.ts`'s `essentialFromPoses` (which names the field `C1`/
+`C2`) already used `translation` as a world-space center; so does
+`local-pose-estimator.ts`'s `composePose`, which accumulates poses by plain
+addition (`base.translation[i] + delta[i]`) — correct for a center, wrong
+for a standard `t`. `reprojection.ts`, `bundle-problem.ts`'s
+`projectWorldPoint`, and `bundle-linearization.ts`'s `linearizeObservation`
+had instead used `R·P + t`, and `reconstruction-optimizer.ts`'s
+`toBundleProblem` passes `KeyframePose.pose` into `BundleProblem` with zero
+conversion — so the bundle-adjustment optimizer was computing residuals and
+Jacobians against a different geometric model than the one the tracking
+pipeline (`local-pose-estimator.ts`, `triangulation.ts`) actually produced
+and consumed, for every camera whose translation is nonzero (i.e. every
+non-anchor camera in every real capture). The error scales with
+`2·|translation|` before the perspective divide — not a rounding issue.
+
+**Fix, precisely:**
+- `reprojection.ts`'s `projectPoint`, `bundle-problem.ts`'s
+  `projectWorldPoint`, `bundle-linearization.ts`'s `linearizeObservation`:
+  `q = R·(P − C)` instead of `R·P + t`.
+- `bundle-linearization.ts`'s analytic camera Jacobian: `∂q/∂C = −R` (was
+  `I`) for the translation block; the rotation block (`∂q/∂ω = −[q]×`) is
+  unchanged — it only depends on `q`, which is now computed correctly.
+- `bundle-optimizer.ts`'s `applyBundleStep`: the camera center's
+  Gauss-Newton step is now a plain world-frame add (`C_new = C + step`),
+  not `applySE3Increment`'s SE3 group composition (`t_new = ΔR·t + Δt`,
+  correct only for a standard `t`). The rotation update (`so3Exp(step)`
+  left-multiplied onto `R`) is unchanged.
+- Mirrored in the Rust ports (`reprojection.rs`, `bundle_linearization.rs`,
+  `bundle_optimizer.rs`'s `apply_camera_steps`), each with a new test that
+  locks in the center-vs-`t` distinction with a nonzero-translation
+  fixture, plus a centered finite-difference cross-check
+  (`bundle-linearization-analytic.test.ts`) proving the fixed analytic
+  Jacobian against numerical differentiation of the fixed forward model.
+- `reconstruction-worker.test.ts`'s fixture, which hand-built "already
+  optimal" pixel observations using the old (`+t`) formula, updated to the
+  new (`−C`) one so its zero-residual premise still holds.
+
+**Consequence:** Any new code that reads `CameraPose.translation` must
+treat it as a center and project with `R·(P − C)`, not `R·P + t`. A
+reviewer adding a new consumer should grep for the existing pattern
+(`− c[0]`/`- center[0]`) rather than copying an older, now-fixed file from
+before this ADR.
+
+**Follow-up fix, same audit, 2026-09-28:** `bundle-block-assembly.ts`'s
+`assembleBundleBlocks` (and its Rust port,
+`crates/reconstruction/src/bundle_block_assembly.rs`) skipped an
+observation's landmark Hessian/gradient contribution entirely whenever its
+camera had no index in the (non-fixed-only) camera index map — i.e.
+whenever the camera was **fixed**, not only when it was genuinely absent.
+A landmark seen by the fixed anchor camera plus free cameras lost the
+anchor's (most trustworthy, since its pose isn't being perturbed)
+contribution to its own optimization. Fixed: the camera block/gradient
+still skips fixed cameras (correct — nothing to solve for), but the
+landmark block/gradient and residual now accumulate for every valid
+observation regardless of whether its camera is fixed; only the
+camera-landmark coupling term requires an actual camera index to couple
+to. See `bundle_block_assembly.rs`'s module doc and its
+`a_landmark_seen_by_a_fixed_and_a_free_camera_accumulates_both_observations`
+test for the exact before/after.
+
 ## Alternatives considered
 
 ### All TypeScript

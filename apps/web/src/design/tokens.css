@@ -99,6 +99,8 @@
   --glass-alpha-strong: 0.93;
   --glass-blur: 30px;
   --shadow-color: 28 33 27;
+  --scrollbar-thumb: rgb(28 33 27 / 0.28);
+  --scrollbar-thumb-hover: rgb(28 33 27 / 0.45);
 }
 
 /* System dark, before any explicit choice is stored. */
@@ -114,6 +116,8 @@
     --glass-alpha: 0.75;
     --glass-alpha-strong: 0.9;
     --shadow-color: 0 0 0;
+    --scrollbar-thumb: rgb(237 238 230 / 0.22);
+    --scrollbar-thumb-hover: rgb(237 238 230 / 0.4);
   }
 }
 
@@ -129,6 +133,8 @@
   --glass-alpha: 0.75;
   --glass-alpha-strong: 0.9;
   --shadow-color: 0 0 0;
+  --scrollbar-thumb: rgb(237 238 230 / 0.22);
+  --scrollbar-thumb-hover: rgb(237 238 230 / 0.4);
 }
 :root[data-theme="light"] {
   --bg: #f4f3ee;

@@ -14,13 +14,22 @@ export class ReconstructionCancelledError extends Error { constructor() { super(
 export function installReconstructionWorker(scope: ReconstructionWorkerScope): void {
   const cancelled = new Set<string>();
   scope.addEventListener("message", (event) => {
-    const message = event.data as { type?: unknown; id?: unknown; input?: unknown };
+    // WorkerJobTransport wraps jobs in an envelope — { type: "submit",
+    // request: { id, operation, input } }. Reading id/input off the top level
+    // made every live-capture refinement job fail the type guard and get
+    // dropped in silence: the controller's optimize() awaited a completion
+    // that never came, so the HUD froze at "0 of 0 iterations". The flat
+    // shape stays accepted for any direct postMessage caller.
+    const message = event.data as { type?: unknown; id?: unknown; input?: unknown; request?: { id?: unknown; input?: unknown } };
     if (message?.type === "cancel" && typeof message.id === "string") { cancelled.add(message.id); return; }
-    if (message?.type !== "submit" || typeof message.id !== "string" || !isInput(message.input)) return;
-    const id = message.id;
+    if (message?.type !== "submit") return;
+    const id = typeof message.request?.id === "string" ? message.request.id : typeof message.id === "string" ? message.id : undefined;
+    const submitted = message.request !== undefined ? message.request.input : message.input;
+    if (id === undefined || !isInput(submitted)) return;
+    const input = submitted;
     try {
       let initialCost: number | undefined;
-      const output = executeReconstructionWorker(message.input, () => cancelled.has(id), (progress) => {
+      const output = executeReconstructionWorker(input, () => cancelled.has(id), (progress) => {
         initialCost ??= progress.initialCost;
         scope.postMessage({ type: "progress", status: { id, state: "running", progress: { completed: Math.min(progress.iteration, progress.total), total: progress.total, cost: progress.cost, initialCost, improvement: initialCost === undefined ? undefined : initialCost - progress.cost } } });
       });

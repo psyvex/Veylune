@@ -14,6 +14,17 @@ export interface CameraIntrinsics {
   readonly cy: number;
 }
 
+/**
+ * Fallback intrinsics for an uncalibrated camera. Assumes the typical phone
+ * main-lens horizontal field of view (~70°): fx = width / (2·tan(hfov/2)).
+ * The old width×0.9 guess implied a ~58° FOV and inflated triangulated depth
+ * by ~30% on most phones.
+ */
+export function defaultIntrinsics(width: number, height: number): CameraIntrinsics {
+  const focal = width / (2 * Math.tan((70 * Math.PI) / 180 / 2));
+  return { fx: focal, fy: focal, cx: width / 2, cy: height / 2 };
+}
+
 export function verifyMatches(
   reference: readonly Keypoint[],
   current: readonly Keypoint[],
